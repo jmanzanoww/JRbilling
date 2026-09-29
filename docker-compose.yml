@@ -1,0 +1,16 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: isp_billing
+      MYSQL_USER: ispbilling
+      MYSQL_PASSWORD: ispbilling
+    ports:
+      - "3306:3306"
+    volumes:
+      - isp_mysql:/var/lib/mysql
+
+volumes:
+  isp_mysql:
