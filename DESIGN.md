@@ -1,5 +1,17 @@
 # ISP Billing Design System
 
+## Fixed frontend stack
+
+JRbilling uses this frontend stack as the product standard:
+
+1. **Tailwind CSS v4** for styling, spacing, responsive behavior, and utility composition.
+2. **Custom shadcn/ui-inspired React components** for reusable administrative UI primitives. Keep them local under `apps/web/src/components/ui`; do not copy the entire shadcn registry or add Radix dependencies unless a real accessibility/interaction requirement needs them.
+3. **Lucide React** for interface icons.
+4. **React 19 + TypeScript** for all frontend application code.
+
+Prefer reusable primitives such as `Button`, `Input`, `Textarea`, `Select`, `Card`, `Table`, `FormField`, and `Drawer` over new page-specific button/input/card CSS. Business screens may compose these primitives into domain-specific components.
+
+
 This file is the single source of truth for the product UI. New UI must reuse these tokens and patterns before introducing a new visual pattern.
 
 ## Product visual personality
