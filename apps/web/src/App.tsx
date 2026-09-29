@@ -512,6 +512,61 @@ export default function App() {
       </>}
     </div></main>
 
+    <Dialog
+      open={Boolean(confirmAction)}
+      title={
+        confirmAction?.type==="SUBSCRIBER_STATUS"
+          ? `${confirmAction.inactive?"Deactivate":"Reactivate"} subscriber`
+          : confirmAction?.type==="SUBSCRIBER_DELETE"
+            ? "Delete subscriber record"
+            : confirmAction?.type==="REAL_DATA_IMPORT"
+              ? "Import approved real data"
+              : "Restore database backup"
+      }
+      description={
+        confirmAction?.type==="SUBSCRIBER_STATUS"
+          ? `${confirmAction.client.fullName} · this changes the subscriber master status only.`
+          : confirmAction?.type==="SUBSCRIBER_DELETE"
+            ? `${confirmAction.client.fullName} · permanent delete is allowed only when no protected history exists.`
+            : confirmAction?.type==="REAL_DATA_IMPORT"
+              ? "Loads the approved snapshot and creates the configured MikroTik placeholders/area mappings. Existing PPPoE accounts are not created or changed."
+              : confirmAction?.type==="RESTORE_BACKUP"
+                ? "This replaces the current database contents with the selected backup and signs users out."
+                : undefined
+      }
+      onClose={()=>{if(!busy)setConfirmAction(null)}}
+    >
+      {confirmAction&&<div className="space-y-4">
+        {(confirmAction.type==="SUBSCRIBER_DELETE"||confirmAction.type==="RESTORE_BACKUP")&&<div className="notice notice-warning"><b>Important:</b> This is a destructive administrative action. Review the target before continuing.</div>}
+        {confirmAction.type==="SUBSCRIBER_STATUS"&&<div className="subpanel p-4 text-sm"><div className="flex justify-between gap-4"><span>Subscriber</span><b>{confirmAction.client.fullName}</b></div><div className="mt-2 flex justify-between gap-4"><span>New status</span><b>{confirmAction.inactive?"INACTIVE":"ACTIVE"}</b></div><div className="mt-2 text-xs text-slate-500">MikroTik state is not changed automatically by this maintenance action.</div></div>}
+        {confirmAction.type==="SUBSCRIBER_DELETE"&&<div className="subpanel p-4 text-sm"><div className="flex justify-between gap-4"><span>Subscriber</span><b>{confirmAction.client.fullName}</b></div><div className="mt-2 flex justify-between gap-4"><span>Client code</span><span>{confirmAction.client.clientCode}</span></div></div>}
+        {confirmAction.type==="RESTORE_BACKUP"&&<div className="subpanel p-4 text-sm"><div className="flex justify-between gap-4"><span>Selected backup</span><b className="max-w-[70%] truncate">{restoreFile?.name??"No file selected"}</b></div></div>}
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+          <button type="button" onClick={()=>setConfirmAction(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          <button type="button" onClick={()=>void executeConfirmAction()} disabled={busy} className={confirmAction.type==="SUBSCRIBER_DELETE"||confirmAction.type==="RESTORE_BACKUP"?"btn-danger":"primary-btn"}>
+            {busy?"Please wait...":confirmAction.type==="SUBSCRIBER_STATUS"?(confirmAction.inactive?"Deactivate":"Reactivate"):confirmAction.type==="SUBSCRIBER_DELETE"?"Delete record":confirmAction.type==="REAL_DATA_IMPORT"?"Import real data":"Restore backup"}
+          </button>
+        </div>
+      </div>}
+    </Dialog>
+
+    <Dialog
+      open={Boolean(pinAction)}
+      title={pinAction?.type==="RESET_USER" ? "Reset user PIN" : "Change my PIN"}
+      description={pinAction?.type==="RESET_USER" ? `Set a new 4–8 digit PIN for ${pinAction.user.displayName}. Existing sessions will be revoked.` : "Enter your current PIN and choose a new 4–8 digit PIN."}
+      onClose={()=>{if(!busy)setPinAction(null)}}
+    >
+      {pinAction&&<form onSubmit={submitPinAction} className="space-y-4">
+        {pinAction.type==="CHANGE_OWN"&&<label className="field-label block">Current PIN<input name="currentPin" type="password" inputMode="numeric" autoComplete="current-password" className="field mt-1 w-full" required/></label>}
+        <label className="field-label block">New PIN<input name="newPin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" className="field mt-1 w-full" required/></label>
+        <label className="field-label block">Confirm new PIN<input name="confirmPin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" className="field mt-1 w-full" required/></label>
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+          <button type="button" onClick={()=>setPinAction(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          <button disabled={busy} className="primary-btn">{busy?"Saving...":"Save PIN"}</button>
+        </div>
+      </form>}
+    </Dialog>
+
     {modal==="newClient"&&<Modal title="New subscriber master record" onClose={()=>{setModal(null);setMaintenanceTarget(null)}}><form onSubmit={e=>void submitClient(e,false)} className="space-y-4"><ClientFormFields/><button disabled={busy} className="primary-btn w-full"><Plus size={16}/>{busy?"Saving...":"Create subscriber"}</button></form></Modal>}
     {maintenanceTarget&&modal==="edit"&&<Modal title="Edit subscriber master record" onClose={()=>{setModal(null);setMaintenanceTarget(null)}}><form onSubmit={e=>void submitClient(e,true)} className="space-y-4"><ClientFormFields client={maintenanceTarget}/><button disabled={busy} className="primary-btn w-full"><Save size={16}/>{busy?"Saving...":"Save changes"}</button></form></Modal>}
     {selected&&modal==="payment"&&<Modal title="Record payment / advance" onClose={()=>setModal(null)}><form onSubmit={submitPayment} className="space-y-4"><div className="grid grid-cols-2 gap-2"><Metric label="Outstanding" value={peso.format(selected.outstanding)} tone="warning"/><Metric label="Current credit" value={peso.format(money(selected.creditBalance))} tone="info"/></div><p className="text-xs leading-5 text-slate-500">Payments clear the oldest unpaid month first. Any amount beyond total debt is stored as advance credit.</p><label className="field-label block">Amount<input name="amount" type="number" min="0.01" step="0.01" defaultValue={selected.outstanding||selected.monthlyRate} className="field mt-1 w-full" required/></label><label className="field-label block">Payment method<select name="method" className="field mt-1 w-full"><option value="CASH">Cash</option><option value="GCASH">GCash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="OTHER">Other</option></select></label><label className="field-label block">Reference no.<input name="referenceNo" className="field mt-1 w-full"/></label><label className="field-label block">Notes<textarea name="notes" className="field mt-1 min-h-20 w-full"/></label><button disabled={busy} className="primary-btn w-full"><ReceiptText size={16}/>{busy?"Saving...":"Save payment & receipt"}</button></form></Modal>}
