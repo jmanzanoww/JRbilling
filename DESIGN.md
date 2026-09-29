@@ -14,6 +14,18 @@ Prefer reusable primitives such as `Button`, `Input`, `Textarea`, `Select`, `Car
 
 This file is the single source of truth for the product UI. New UI must reuse these tokens and patterns before introducing a new visual pattern.
 
+## Mobile and field use
+
+JRbilling must be usable on phones, with **collector workflows treated as mobile-first**.
+
+- Collector **My Route** uses stacked client cards on small screens rather than requiring horizontal table scrolling.
+- Primary field actions (Call, SOA, Record Payment, Submit) use touch targets of roughly 44px or larger.
+- Collector navigation includes persistent mobile quick access to Home, My Route, My Submissions, Subscribers, and Billing.
+- Payment forms use a mobile bottom-sheet style dialog and support direct camera capture for proof of payment.
+- Tables remain available on desktop; important collector actions must not depend on a desktop-only table.
+- Inputs use mobile-safe sizing (including 16px text where needed to avoid browser zoom), one-column forms on narrow screens, and safe-area padding.
+- Admin pages remain responsive, but dense administrative tables may use horizontal scrolling when a card representation would hide important columns.
+
 ## Information architecture
 
 Navigation is grouped by job function, not by database table:
