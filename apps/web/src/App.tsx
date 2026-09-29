@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowLeft, CalendarClock, CheckCircle2, CircleDollarSign, ClipboardList, DatabaseBackup, FileSpreadsheet,
+  Activity, ArrowLeft, CalendarClock, CircleDollarSign, ClipboardList, DatabaseBackup, FileSpreadsheet,
   History, LayoutDashboard, LockKeyhole, LogOut, MessageSquareText, Phone, Plus, Power, Printer, ReceiptText, RefreshCcw,
   Router, Save, Search, Send, Settings, ShieldCheck, Signal, UserCog, UserRound, Users, WalletCards, Wifi, X, ChevronDown, ChevronRight
 } from "lucide-react";
