@@ -8,6 +8,7 @@ import { api, API_URL, publicApi, setAuthToken } from "./api";
 import FieldCollectionOps from "./FieldCollectionOps";
 import NetworkOps from "./NetworkOps";
 import { EmptyState, LoadingState, Metric, StatusBadge } from "./ui";
+import { Dialog } from "./components/ui";
 import { demoClients, demoDashboard, demoLedgers } from "./demo";
 import type {
   AuditRow, AuthResponse, AuthUser, BackupFileRow, ClientRow, Dashboard, Ledger, LedgerBill, MessageRow, OperatorUser, PaymentMethod, Receipt,
@@ -25,6 +26,13 @@ const todayInput = () => new Date().toISOString().slice(0, 10);
 type Tab = "Dashboard" | "Clients" | "Billing" | "Field Collection" | "Collections" | "Service" | "Network" | "Subscriber Maintenance" | "User Maintenance" | "Import" | "Admin";
 type ModalName = "payment" | "extend" | "service" | "edit" | "receipt" | "soa" | "newClient" | "newUser" | "editUser" | "message" | null;
 type CollectionRow = { id: number; receiptNo: string; paidAt: string; amount: number | string; method: PaymentMethod; receivedBy?: string | null; approvedBy?: string | null; client: { id: number; clientCode: string; fullName: string; area: string } };
+type ConfirmAction =
+  | { type: "SUBSCRIBER_STATUS"; client: ClientRow; inactive: boolean }
+  | { type: "SUBSCRIBER_DELETE"; client: ClientRow }
+  | { type: "REAL_DATA_IMPORT" }
+  | { type: "RESTORE_BACKUP" }
+  | null;
+type PinAction = { type: "RESET_USER"; user: OperatorUser } | { type: "CHANGE_OWN" } | null;
 type RealDataPreview = { sheet: string; year: number; month: number; readyCount: number; reviewCount: number; areaMappings: { MIKROTIK_1: readonly string[]; MIKROTIK_2: readonly string[] }; unassignedAreas: string[]; reviewRows: Array<{ sourceRow:number; area:string; fullName:string; dueDay:number|null; monthlyRate:number|null; legacyStatus:string; legacyNote:string; reason:string }> };
 
 const nav: { key: Tab; icon: typeof LayoutDashboard; label: string }[] = [
@@ -72,7 +80,7 @@ function Card({ title, value, note, icon: Icon }: { title: string; value: string
 }
 
 function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
-  return <div className="dialog-backdrop" onMouseDown={onClose}><div className={`dialog ${wide ? "max-w-4xl" : "max-w-xl"}`} onMouseDown={(e)=>e.stopPropagation()}><div className="dialog-header"><h3 className="dialog-title">{title}</h3><button className="icon-btn" onClick={onClose} aria-label="Close dialog" title="Close"><X size={17}/></button></div><div className="dialog-body">{children}</div></div></div>;
+  return <div className="dialog-backdrop"><div className={`dialog ${wide ? "max-w-4xl" : "max-w-xl"}`}><div className="dialog-header"><h3 className="dialog-title">{title}</h3><button className="icon-btn" onClick={onClose} aria-label="Close dialog" title="Close"><X size={17}/></button></div><div className="dialog-body">{children}</div></div></div>;
 }
 
 function ClientFormFields({ client }: { client?: Ledger | ClientRow | null }) {
@@ -146,6 +154,8 @@ export default function App() {
   const now = new Date(); const [importYear,setImportYear]=useState(now.getFullYear()); const [importMonth,setImportMonth]=useState(now.getMonth()+1);
   const [billYear,setBillYear]=useState(now.getFullYear()); const [billMonth,setBillMonth]=useState(now.getMonth()+1); const [billingMessage,setBillingMessage]=useState("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const [pinAction, setPinAction] = useState<PinAction>(null);
 
   async function refresh() {
     if (backendOnline && !authUser) return;
