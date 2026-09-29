@@ -74,7 +74,7 @@ export const importRoutes: FastifyPluginAsync = async (app) => {
         if (status === "PAID") paid++; else unpaid++; if (serviceStatus === "CUT") cut++;
       }
       return { created, updated, total: realDataSnapshot.clients.length, paid, unpaid, cut, mt1Id: mt1.id, mt2Id: mt2.id, mt3Id: mt3.id };
-    });
+    }, { maxWait: 15_000, timeout: 120_000 });
 
     await audit("REAL_DATA_SNAPSHOT_IMPORTED", "ExcelSnapshot", `${realDataSnapshot.snapshot.year}-${String(realDataSnapshot.snapshot.month).padStart(2,"0")}`, actor, { ...result, reviewCount: realDataSnapshot.reviewRows.length, sourceSheet: realDataSnapshot.snapshot.sheet });
     return { ...result, reviewRows: realDataSnapshot.reviewRows, unassignedAreas: [...new Set(realDataSnapshot.clients.filter((x) => !x.routerGroup).map((x) => x.area))].sort(), note: "Paid rows are marked paid without fabricating payment dates/receipts. Existing subscribers are placed in For Linking, not For Activation." };
