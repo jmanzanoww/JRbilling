@@ -43,8 +43,8 @@ const nav: { key: Tab; icon: typeof LayoutDashboard; label: string }[] = [
 
 const navGroups: { label: string; keys: Tab[] }[] = [
   { label: "Overview", keys: ["Dashboard"] },
-  { label: "Transactions", keys: ["Billing", "Field Collection", "Collections", "Service"] },
-  { label: "Subscriber Operations", keys: ["Clients"] },
+  { label: "Billing & Collection", keys: ["Billing", "Field Collection", "Collections"] },
+  { label: "Subscriber Operations", keys: ["Clients", "Service"] },
   { label: "Network Operations", keys: ["Network"] },
   { label: "Maintenance", keys: ["Subscriber Maintenance", "User Maintenance", "Import"] },
   { label: "System", keys: ["Admin"] }
