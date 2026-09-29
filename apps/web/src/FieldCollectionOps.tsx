@@ -103,6 +103,7 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
   const [submissions, setSubmissions] = useState<PaymentSubmissionRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [q, setQ] = useState("");
+  const [routeQuery, setRouteQuery] = useState("");
   const [area, setArea] = useState("");
   const [payClient, setPayClient] = useState<CollectionAssignmentRow["client"] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,11 +191,20 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
     return map;
   }, [assignments]);
   const mySubByClient = useMemo(() => new Map(submissions.map((s) => [s.clientId, s])), [submissions]);
+  const collectorFilteredAssignments = useMemo(() => {
+    const needle = routeQuery.trim().toLowerCase();
+    if (!needle) return assignments;
+    return assignments.filter((row) =>
+      `${row.client.fullName} ${row.client.clientCode} ${row.client.area} ${row.client.primaryMobile ?? ""}`
+        .toLowerCase()
+        .includes(needle)
+    );
+  }, [assignments, routeQuery]);
   const collectorAreaGroups = useMemo(() => {
     const map = new Map<string, CollectionAssignmentRow[]>();
-    for (const row of assignments) map.set(row.client.area, [...(map.get(row.client.area) ?? []), row]);
+    for (const row of collectorFilteredAssignments) map.set(row.client.area, [...(map.get(row.client.area) ?? []), row]);
     return [...map.entries()].sort(([a],[b])=>a.localeCompare(b));
-  }, [assignments]);
+  }, [collectorFilteredAssignments]);
   const areaPlans = useMemo<AreaPlan[]>(() => {
     const map = new Map<string, CollectionCandidate[]>();
     for (const client of candidates) map.set(client.area, [...(map.get(client.area) ?? []), client]);
@@ -437,9 +447,12 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
     {isAdmin && view==="SHEETS" && <section className="panel p-4"><h3 className="font-semibold">Printable collector sheets</h3><p className="mt-1 text-sm text-slate-500">Each printout is automatically grouped by area, with area subtotals and blank paper fields for collected amount, signature, and remarks.</p><div className="mt-4 grid gap-4 md:grid-cols-2">{collectors.map((u) => { const rows = grouped.get(u.id) ?? []; const collectorAreas = [...new Set(rows.map((r) => r.client.area))]; return <div key={u.id} className="subpanel p-4"><div className="flex items-start justify-between gap-3"><div><b>{u.displayName}</b><div className="mt-1 text-sm text-slate-500">{collectorAreas.length} area(s) · {rows.length} client(s) · {peso.format(rows.reduce((sum, r) => sum + r.client.outstanding, 0))}</div></div><button disabled={!rows.length} onClick={() => printCollectionList(rows, date, u.displayName)} className="action-btn disabled:opacity-40"><Printer size={15}/>Print</button></div>{rows.length > 0 && <div className="mt-3 max-h-44 overflow-auto text-xs text-slate-400">{rows.map((r) => <div key={r.id} className="flex justify-between gap-3 border-t border-[var(--border)] py-2"><span>{r.client.area} · {r.client.fullName}</span><button onClick={() => setRemoveAssignmentTarget(r)} className="btn-ghost !min-h-7 !px-2 !text-[#f09aa0]">Remove</button></div>)}</div>}</div>; })}{!collectors.length && <div className="text-sm text-slate-500">Create collector accounts in User Maintenance first.</div>}</div></section>}
 
     {!isAdmin && view==="MY_ROUTE" && <section className="panel overflow-hidden">
-      <div className="border-b border-[var(--border)] p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Assigned clients</h3><p className="mt-1 text-sm text-slate-500">Sorted by area so nearby collections stay together.</p></div><div className="rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]">{assignments.length} client{assignments.length===1?"":"s"}</div></div></div>
+      <div className="border-b border-[var(--border)] p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Assigned clients</h3><p className="mt-1 text-sm text-slate-500">Sorted by area so nearby collections stay together.</p></div><div className="rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]">{collectorFilteredAssignments.length}{routeQuery.trim()?` of ${assignments.length}`:""} client{collectorFilteredAssignments.length===1?"":"s"}</div></div>
+        <div className="relative mt-4"><Search size={17} className="pointer-events-none absolute left-3.5 top-3.5 text-slate-400"/><input value={routeQuery} onChange={(e)=>setRouteQuery(e.target.value)} type="search" inputMode="search" autoComplete="off" placeholder="Search name, client code, area, or mobile..." className="field w-full pl-10 pr-10"/>{routeQuery&&<button type="button" onClick={()=>setRouteQuery("")} aria-label="Clear route search" title="Clear search" className="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={15}/></button>}</div>
+      </div>
 
-      <div className="hidden overflow-x-auto md:block"><table className="data-table min-w-[900px]"><thead><tr><th className="px-5 py-3">Client</th><th>Area / Mobile</th><th>Oldest due</th><th>Open month(s)</th><th className="text-right">Outstanding</th><th>Submission</th><th></th></tr></thead><tbody>{assignments.map((r) => { const sub = mySubByClient.get(r.clientId); return <tr key={r.id}><td className="px-5 py-4"><b>{r.client.fullName}</b><div className="text-xs text-slate-500">{r.client.clientCode}</div></td><td>{r.client.area}<div className="text-xs text-slate-500">{r.client.primaryMobile ?? "No mobile"}</div></td><td>{r.client.oldestDueDate ? dateFmt.format(new Date(r.client.oldestDueDate)) : "—"}</td><td>{r.client.openPeriods.join(", ")}</td><td className="text-right font-semibold text-[#f09aa0]">{peso.format(r.client.outstanding)}</td><td>{sub ? <Badge value={sub.status}/> : <span className="text-slate-500">Not submitted</span>}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => void openSoa(r.clientId)} className="btn-ghost !min-h-8 !px-2">SOA</button><button disabled={Boolean(sub && ["PENDING", "APPROVING"].includes(sub.status))} onClick={() => setPayClient(r.client)} className="btn-ghost !min-h-8 !px-2 !text-[#039855] disabled:!text-slate-600">Record payment</button></div></td></tr>; })}{!assignments.length && <tr><td colSpan={7} className="p-0"><EmptyState title="No assigned clients" description="Ask the admin to assign an area or client for this collection date."/></td></tr>}</tbody></table></div>
+      <div className="hidden overflow-x-auto md:block"><table className="data-table min-w-[900px]"><thead><tr><th className="px-5 py-3">Client</th><th>Area / Mobile</th><th>Oldest due</th><th>Open month(s)</th><th className="text-right">Outstanding</th><th>Submission</th><th></th></tr></thead><tbody>{collectorFilteredAssignments.map((r) => { const sub = mySubByClient.get(r.clientId); return <tr key={r.id}><td className="px-5 py-4"><b>{r.client.fullName}</b><div className="text-xs text-slate-500">{r.client.clientCode}</div></td><td>{r.client.area}<div className="text-xs text-slate-500">{r.client.primaryMobile ?? "No mobile"}</div></td><td>{r.client.oldestDueDate ? dateFmt.format(new Date(r.client.oldestDueDate)) : "—"}</td><td>{r.client.openPeriods.join(", ")}</td><td className="text-right font-semibold text-[#f09aa0]">{peso.format(r.client.outstanding)}</td><td>{sub ? <Badge value={sub.status}/> : <span className="text-slate-500">Not submitted</span>}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => void openSoa(r.clientId)} className="btn-ghost !min-h-8 !px-2">SOA</button><button disabled={Boolean(sub && ["PENDING", "APPROVING"].includes(sub.status))} onClick={() => setPayClient(r.client)} className="btn-ghost !min-h-8 !px-2 !text-[#039855] disabled:!text-slate-600">Record payment</button></div></td></tr>; })}{!collectorFilteredAssignments.length && <tr><td colSpan={7} className="p-0"><EmptyState title={assignments.length?"No matching assigned clients":"No assigned clients"} description={assignments.length?"Try a different name, client code, area, or mobile number.":"Ask the admin to assign an area or client for this collection date."}/></td></tr>}</tbody></table></div>
 
       <div className="collector-route-mobile md:hidden">
         {collectorAreaGroups.map(([areaName, rows])=><section key={areaName} className="collector-area-group">
@@ -452,7 +465,7 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
             <div className="mt-4 grid grid-cols-2 gap-2"><button onClick={()=>void openSoa(r.clientId)} className="btn-secondary collector-touch"><Printer size={16}/>SOA</button><button disabled={paymentPending} onClick={()=>setPayClient(r.client)} className="primary-btn collector-touch disabled:opacity-45"><WalletCards size={16}/>{paymentPending?"Submitted":"Record Payment"}</button></div>
           </article>})}</div>
         </section>)}
-        {!assignments.length&&<EmptyState title="No assigned clients" description="Ask the admin to assign an area or client for this collection date."/>}
+        {!collectorFilteredAssignments.length&&<EmptyState title={assignments.length?"No matching assigned clients":"No assigned clients"} description={assignments.length?"Try a different name, client code, area, or mobile number.":"Ask the admin to assign an area or client for this collection date."}/>} 
       </div>
     </section>}
 
