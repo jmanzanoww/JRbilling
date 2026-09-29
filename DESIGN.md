@@ -14,6 +14,19 @@ Prefer reusable primitives such as `Button`, `Input`, `Textarea`, `Select`, `Car
 
 This file is the single source of truth for the product UI. New UI must reuse these tokens and patterns before introducing a new visual pattern.
 
+## Information architecture
+
+Navigation is grouped by job function, not by database table:
+
+- **Overview**: Dashboard
+- **Billing & Collection**: Billing, Field Collection, Collections
+- **Subscriber Operations**: Subscriber Accounts, Service Actions
+- **Network Operations**: Network
+- **Maintenance**: Subscriber Maintenance, User Maintenance, Data Import
+- **System**: System Settings, Backup/Restore, Automation/Integrations, queues, and audit
+
+Operational pages must not expose routine CRUD controls unless they are part of the task. Subscriber Add/Edit/Deactivate/Delete-type actions belong in Subscriber Maintenance. User account creation/edit/access management belongs in User Maintenance. Hard delete is protected for audited/history-bearing records.
+
 ## Product visual personality
 
 **Operational, trustworthy, compact, local-business specific.** The product should feel like software used all day by an ISP billing/collection team, not a marketing dashboard. Visual hierarchy comes from typography, alignment, borders, data density, and consistent status language. Decorative effects are intentionally limited.
