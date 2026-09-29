@@ -243,33 +243,53 @@ export default function App() {
   }
 
   async function setSubscriberMaintenanceStatus(client: ClientRow, inactive: boolean){
-    const verb=inactive?"deactivate":"reactivate";
-    if(!window.confirm(`${inactive?"Deactivate":"Reactivate"} ${client.fullName}? This changes the subscriber master record only; MikroTik state is not changed automatically.`)) return;
-    try{
-      if(live){
-        await api(`/clients/${client.id}/maintenance-status`,{method:"PATCH",body:JSON.stringify({inactive})});
-        await refresh();
-      }else{
-        setClients(p=>p.map(c=>c.id===client.id?{...c,serviceStatus:inactive?"INACTIVE":"ACTIVE"}:c));
-      }
-      setNotice(`Subscriber ${verb}d in Maintenance.`);
-    }catch(err){
-      setNotice(err instanceof Error?err.message:`Unable to ${verb} subscriber.`);
-    }
+    setConfirmAction({ type: "SUBSCRIBER_STATUS", client, inactive });
   }
 
   async function deleteSubscriberMaintenance(client: ClientRow){
-    if(!window.confirm(`Permanently delete unused subscriber record ${client.fullName}? Records with billing, payment, service, or network history will be protected and cannot be deleted.`)) return;
+    setConfirmAction({ type: "SUBSCRIBER_DELETE", client });
+  }
+
+  async function executeConfirmAction(){
+    if(!confirmAction)return;
+    setBusy(true);
     try{
-      if(live){
-        await api(`/clients/${client.id}`,{method:"DELETE"});
+      if(confirmAction.type==="SUBSCRIBER_STATUS"){
+        const {client,inactive}=confirmAction;
+        if(live){
+          await api(`/clients/${client.id}/maintenance-status`,{method:"PATCH",body:JSON.stringify({inactive})});
+          await refresh();
+        }else{
+          setClients(p=>p.map(c=>c.id===client.id?{...c,serviceStatus:inactive?"INACTIVE":"ACTIVE"}:c));
+        }
+        setNotice(`Subscriber ${inactive?"deactivated":"reactivated"} in Maintenance.`);
+      }else if(confirmAction.type==="SUBSCRIBER_DELETE"){
+        const client=confirmAction.client;
+        if(live){
+          await api(`/clients/${client.id}`,{method:"DELETE"});
+          await refresh();
+        }else{
+          setClients(p=>p.filter(c=>c.id!==client.id));
+        }
+        setNotice("Unused subscriber master record deleted.");
+      }else if(confirmAction.type==="REAL_DATA_IMPORT"){
+        const r=await api<{created:number;updated:number;total:number;paid:number;unpaid:number;cut:number;reviewRows:RealDataPreview["reviewRows"];unassignedAreas:string[];note:string}>("/import/real-data/bootstrap",{method:"POST"});
+        setImportMessage(`Real data loaded: ${r.total} clients (${r.created} new, ${r.updated} updated). ${r.paid} marked paid, ${r.unpaid} open/unpaid, ${r.cut} cut. ${r.reviewRows.length} incomplete rows remain for manual review. ${r.note}`);
         await refresh();
-      }else{
-        setClients(p=>p.filter(c=>c.id!==client.id));
+        await previewBundledRealData();
+      }else if(confirmAction.type==="RESTORE_BACKUP"){
+        if(!restoreFile)throw new Error("Choose a JSON backup first.");
+        const backup=JSON.parse(await restoreFile.text());
+        await api("/admin/restore",{method:"POST",body:JSON.stringify({confirm:"RESTORE",backup})});
+        setNotice("Backup restored successfully. Please sign in again.");
+        setAuthToken(null);setAuthUser(null);setLive(false);await boot();
       }
-      setNotice("Unused subscriber master record deleted.");
+      setConfirmAction(null);
     }catch(err){
-      setNotice(err instanceof Error?err.message:"Unable to delete subscriber.");
+      const message=err instanceof Error?err.message:"Action failed.";
+      if(confirmAction.type==="REAL_DATA_IMPORT")setImportMessage(message);else setNotice(message);
+    }finally{
+      setBusy(false);
     }
   }
 
