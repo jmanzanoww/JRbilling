@@ -71,6 +71,66 @@ export const clientRoutes: FastifyPluginAsync = async (app) => {
     return { ...updated, monthlyRate: Number(updated.monthlyRate), creditBalance: Number(updated.creditBalance) };
   });
 
+  app.patch("/clients/:id/maintenance-status", { preHandler: requireRoles("ADMIN") }, async (request, reply) => {
+    const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const { inactive } = z.object({ inactive: z.boolean() }).parse(request.body);
+    const existing = await prisma.client.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ message: "Client not found" });
+    if (!inactive && existing.serviceStatus !== "INACTIVE") {
+      return reply.code(409).send({ message: "Only inactive subscriber records can be reactivated from Maintenance." });
+    }
+    const nextStatus = inactive ? "INACTIVE" as const : "ACTIVE" as const;
+    const updated = await prisma.client.update({ where: { id }, data: { serviceStatus: nextStatus } });
+    await audit(inactive ? "CLIENT_MAINTENANCE_DEACTIVATED" : "CLIENT_MAINTENANCE_REACTIVATED", "Client", id, actorFrom(request), {
+      clientCode: existing.clientCode,
+      fullName: existing.fullName,
+      previousStatus: existing.serviceStatus,
+      nextStatus,
+      networkStatusUnchanged: true
+    });
+    return { ...updated, monthlyRate: Number(updated.monthlyRate), creditBalance: Number(updated.creditBalance) };
+  });
+
+  app.delete("/clients/:id", { preHandler: requireRoles("ADMIN") }, async (request, reply) => {
+    const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const existing = await prisma.client.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            bills: true,
+            payments: true,
+            paymentSubmissions: true,
+            serviceActions: true,
+            creditTransactions: true,
+            routerJobs: true,
+            collectionAssignments: true,
+            billExtensions: true,
+            networkMigrations: true,
+            messages: true
+          }
+        }
+      }
+    });
+    if (!existing) return reply.code(404).send({ message: "Client not found" });
+
+    const historyCount = Object.values(existing._count).reduce((sum, count) => sum + count, 0);
+    if (historyCount > 0 || existing.mikrotikAccount || existing.networkActivatedAt) {
+      return reply.code(409).send({
+        message: "This subscriber has billing, collection, service, or network history and cannot be permanently deleted. Deactivate the record instead."
+      });
+    }
+
+    await prisma.client.delete({ where: { id } });
+    await audit("CLIENT_DELETED", "Client", id, actorFrom(request), {
+      clientCode: existing.clientCode,
+      fullName: existing.fullName,
+      area: existing.area,
+      reason: "Unused master record deleted from Subscriber Maintenance"
+    });
+    return { ok: true };
+  });
+
   app.get("/clients/:id/ledger", async (request, reply) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const client = await prisma.client.findUnique({ where: { id }, include: {
