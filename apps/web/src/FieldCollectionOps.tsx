@@ -96,6 +96,7 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
   const [collectorId, setCollectorId] = useState<number | "">("");
   const [candidates, setCandidates] = useState<CollectionCandidate[]>([]);
   const [assignments, setAssignments] = useState<CollectionAssignmentRow[]>([]);
+  const [assignedDates, setAssignedDates] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<PaymentSubmissionRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [q, setQ] = useState("");
@@ -104,6 +105,23 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [view, setView] = useState<FieldCollectionView>(() => isAdmin ? "ROUTE" : "MY_ROUTE");
+
+  async function loadAssignedDates() {
+    if (!live || !authUser || isAdmin) return;
+    try {
+      const dates = await api<string[]>("/field-collection/assignment-dates?limit=60");
+      setAssignedDates(dates);
+      if (dates.length && !dates.includes(date)) {
+        const today = localDate(0);
+        const upcoming = [...dates].filter((value) => value >= today).sort((a, b) => a.localeCompare(b))[0];
+        const latestPast = [...dates].filter((value) => value < today).sort((a, b) => b.localeCompare(a))[0];
+        const preferred = upcoming ?? latestPast;
+        if (preferred && preferred !== date) setDate(preferred);
+      }
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Unable to load assigned collection dates.");
+    }
+  }
 
   async function load() {
     if (!live || !authUser) return;
@@ -152,6 +170,11 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, mode, dueFrom, dueTo, includeOverdue, includeExtended, live, authUser?.id]);
+
+  useEffect(() => {
+    if (!isAdmin) void loadAssignedDates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, authUser?.id, isAdmin]);
 
   useEffect(() => {
     setView(isAdmin ? "ROUTE" : "MY_ROUTE");
@@ -338,10 +361,12 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-2"><ClipboardList size={18} className="text-slate-400"/><h2 className="text-base font-semibold">{isAdmin ? "Collection Route Builder" : "My Collection List"}</h2></div>
-          <p className="mt-1 text-sm text-slate-400">{isAdmin ? "Plan tomorrow's route, handle exceptions, print collector sheets, and review submitted payments in separate workspaces." : "Your assigned clients for the selected collection date."}</p>
+          <p className="mt-1 text-sm text-slate-400">{isAdmin ? "Plan tomorrow's route, handle exceptions, print collector sheets, and review submitted payments in separate workspaces." : `Route for ${fmtDateInput(date)} · only clients assigned to your account are shown.`}</p>
+          {!isAdmin && assignedDates.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-500">Assigned dates:</span>{[...assignedDates].sort((a,b)=>a.localeCompare(b)).slice(0,8).map((assignedDate)=><button key={assignedDate} onClick={()=>setDate(assignedDate)} className={`btn-secondary !min-h-8 !px-2.5 text-xs ${date===assignedDate?"!border-[var(--accent)] !bg-[var(--accent-soft)] !text-[var(--accent)]":""}`}>{fmtDateInput(assignedDate)}</button>)}</div>}
         </div>
-        <div className="flex flex-wrap items-end gap-2"><label className="field-label">Collection date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field mt-1 block"/></label><button onClick={() => void load()} className="action-btn"><RefreshCcw size={15}/>Refresh</button></div>
+        <div className="flex flex-wrap items-end gap-2"><label className="field-label">Collection date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field mt-1 block"/></label><button onClick={() => void (isAdmin ? load() : Promise.all([load(), loadAssignedDates()]))} className="action-btn"><RefreshCcw size={15}/>Refresh</button></div>
       </div>
+      {!isAdmin && assignedDates.length===0 && <div className="notice notice-info mt-4">No collection dates are currently assigned to your account. Ask the admin to assign your route first.</div>}
     </section>
 
     <section className="panel overflow-hidden">
