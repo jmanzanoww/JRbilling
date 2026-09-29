@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Camera, CheckCircle2, ClipboardList, FileCheck2, Printer, RefreshCcw, Search, Upload, X, XCircle } from "lucide-react";
 import { api, apiBlob } from "./api";
 import { EmptyState, Metric, Notice, StatusBadge } from "./ui";
+import { Dialog } from "./components/ui";
 import type {
   AreaCollectorDefaultRow,
   AuthUser,
@@ -80,6 +81,8 @@ function printReceipt(receipt: Receipt) {
 type Props = { authUser: AuthUser | null; live: boolean };
 type AreaPlan = { area: string; clients: CollectionCandidate[]; total: number };
 type FieldCollectionView = "ROUTE" | "EXCEPTIONS" | "SHEETS" | "APPROVALS" | "MY_ROUTE" | "MY_SUBMISSIONS";
+type ReviewDecision = "APPROVE" | "REJECT" | "NEEDS_INFO";
+type ReviewTarget = { submission: PaymentSubmissionRow; decision: ReviewDecision } | null;
 
 export default function FieldCollectionOps({ authUser, live }: Props) {
   const isAdmin = authUser?.role === "ADMIN";
@@ -105,6 +108,8 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [view, setView] = useState<FieldCollectionView>(() => isAdmin ? "ROUTE" : "MY_ROUTE");
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget>(null);
+  const [removeAssignmentTarget, setRemoveAssignmentTarget] = useState<CollectionAssignmentRow | null>(null);
 
   async function loadAssignedDates() {
     if (!live || !authUser || isAdmin) return;
@@ -274,10 +279,19 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     }
   }
 
-  async function removeAssignment(id: number) {
-    if (!confirm("Remove this client from the collection list?")) return;
-    await api(`/field-collection/assignments/${id}`, { method: "DELETE" });
-    await load();
+  async function confirmRemoveAssignment() {
+    if (!removeAssignmentTarget) return;
+    setBusy(true);
+    try {
+      await api(`/field-collection/assignments/${removeAssignmentTarget.id}`, { method: "DELETE" });
+      setNotice(`${removeAssignmentTarget.client.fullName} removed from the collection route.`);
+      setRemoveAssignmentTarget(null);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Unable to remove assignment.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitPayment(e: FormEvent<HTMLFormElement>) {
@@ -297,26 +311,41 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     }
   }
 
-  async function review(s: PaymentSubmissionRow, decision: "APPROVE" | "REJECT" | "NEEDS_INFO") {
-    let approvedAmount: number | undefined;
-    let reviewNotes = "";
-    if (decision === "APPROVE") {
-      const raw = prompt("Approved amount:", String(s.amount));
-      if (raw === null) return;
-      approvedAmount = Number(raw);
-      if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
-        setNotice("Invalid approved amount.");
-        return;
-      }
-      reviewNotes = prompt("Approval note (optional):", "") ?? "";
-    } else {
-      reviewNotes = prompt(decision === "REJECT" ? "Reason for rejection:" : "What additional information is needed?", s.reviewNotes ?? "") ?? "";
-      if (!reviewNotes.trim()) return;
+  function openReview(submission: PaymentSubmissionRow, decision: ReviewDecision) {
+    setReviewTarget({ submission, decision });
+  }
+
+  async function submitReview(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!reviewTarget) return;
+    const fd = new FormData(e.currentTarget);
+    const { submission, decision } = reviewTarget;
+    const reviewNotes = String(fd.get("reviewNotes") || "").trim();
+    const approvedAmount = decision === "APPROVE" ? Number(fd.get("approvedAmount")) : undefined;
+
+    if (decision === "APPROVE" && (!Number.isFinite(approvedAmount) || Number(approvedAmount) <= 0)) {
+      setNotice("Enter a valid approved amount.");
+      return;
     }
+    if (decision !== "APPROVE" && !reviewNotes) {
+      setNotice(decision === "REJECT" ? "Enter the rejection reason." : "Enter the information requested from the collector.");
+      return;
+    }
+
     setBusy(true);
     try {
-      await api(`/payment-submissions/${s.id}/review`, { method: "POST", body: JSON.stringify({ decision, approvedAmount, reviewNotes }) });
-      setNotice(decision === "APPROVE" ? "Payment approved and posted to the official ledger." : decision === "REJECT" ? "Payment submission rejected." : "Collector was asked for more information.");
+      await api(`/payment-submissions/${submission.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ decision, approvedAmount, reviewNotes: reviewNotes || undefined })
+      });
+      setNotice(
+        decision === "APPROVE"
+          ? "Payment approved and posted to the official ledger."
+          : decision === "REJECT"
+            ? "Payment submission rejected."
+            : "Collector was asked for more information."
+      );
+      setReviewTarget(null);
       await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Review failed.");
@@ -420,11 +449,49 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
         <div className="table-shell mt-4 max-h-[430px]"><table className="data-table min-w-[900px]"><thead className="sticky top-0"><tr><th className="px-4 py-3"></th><th>Client</th><th>Area</th><th>Oldest due</th><th>Open months</th><th className="text-right">Outstanding</th><th>Assigned</th></tr></thead><tbody>{filtered.map((c) => <tr key={c.id} ><td className="px-4 py-3"><input type="checkbox" checked={selected.has(c.id)} onChange={(e) => setSelected((prev) => { const next = new Set(prev); e.target.checked ? next.add(c.id) : next.delete(c.id); return next; })}/></td><td className="py-3"><b>{c.fullName}</b><div className="text-xs text-slate-500">{c.clientCode}</div></td><td>{c.area}</td><td>{c.oldestDueDate ? dateFmt.format(new Date(c.oldestDueDate)) : "—"}</td><td>{c.openPeriods.join(", ")}</td><td className="text-right font-semibold text-[#f09aa0]">{peso.format(c.outstanding)}</td><td>{c.assignment?.collector?.displayName ?? "—"}</td></tr>)}{!filtered.length&&<tr><td colSpan={7} className="p-0"><EmptyState title="No clients in this view" description="Adjust the search, area filter, or due-date criteria."/></td></tr>}</tbody></table></div>
       </section>}
 
-    {isAdmin && view==="SHEETS" && <section className="panel p-4"><h3 className="font-semibold">Printable collector sheets</h3><p className="mt-1 text-sm text-slate-500">Each printout is automatically grouped by area, with area subtotals and blank paper fields for collected amount, signature, and remarks.</p><div className="mt-4 grid gap-4 md:grid-cols-2">{collectors.map((u) => { const rows = grouped.get(u.id) ?? []; const collectorAreas = [...new Set(rows.map((r) => r.client.area))]; return <div key={u.id} className="subpanel p-4"><div className="flex items-start justify-between gap-3"><div><b>{u.displayName}</b><div className="mt-1 text-sm text-slate-500">{collectorAreas.length} area(s) · {rows.length} client(s) · {peso.format(rows.reduce((sum, r) => sum + r.client.outstanding, 0))}</div></div><button disabled={!rows.length} onClick={() => printCollectionList(rows, date, u.displayName)} className="action-btn disabled:opacity-40"><Printer size={15}/>Print</button></div>{rows.length > 0 && <div className="mt-3 max-h-44 overflow-auto text-xs text-slate-400">{rows.map((r) => <div key={r.id} className="flex justify-between gap-3 border-t border-[var(--border)] py-2"><span>{r.client.area} · {r.client.fullName}</span><button onClick={() => void removeAssignment(r.id)} className="btn-ghost !min-h-7 !px-2 !text-[#f09aa0]">Remove</button></div>)}</div>}</div>; })}{!collectors.length && <div className="text-sm text-slate-500">Create collector accounts in User Maintenance first.</div>}</div></section>}
+    {isAdmin && view==="SHEETS" && <section className="panel p-4"><h3 className="font-semibold">Printable collector sheets</h3><p className="mt-1 text-sm text-slate-500">Each printout is automatically grouped by area, with area subtotals and blank paper fields for collected amount, signature, and remarks.</p><div className="mt-4 grid gap-4 md:grid-cols-2">{collectors.map((u) => { const rows = grouped.get(u.id) ?? []; const collectorAreas = [...new Set(rows.map((r) => r.client.area))]; return <div key={u.id} className="subpanel p-4"><div className="flex items-start justify-between gap-3"><div><b>{u.displayName}</b><div className="mt-1 text-sm text-slate-500">{collectorAreas.length} area(s) · {rows.length} client(s) · {peso.format(rows.reduce((sum, r) => sum + r.client.outstanding, 0))}</div></div><button disabled={!rows.length} onClick={() => printCollectionList(rows, date, u.displayName)} className="action-btn disabled:opacity-40"><Printer size={15}/>Print</button></div>{rows.length > 0 && <div className="mt-3 max-h-44 overflow-auto text-xs text-slate-400">{rows.map((r) => <div key={r.id} className="flex justify-between gap-3 border-t border-[var(--border)] py-2"><span>{r.client.area} · {r.client.fullName}</span><button onClick={() => setRemoveAssignmentTarget(r)} className="btn-ghost !min-h-7 !px-2 !text-[#f09aa0]">Remove</button></div>)}</div>}</div>; })}{!collectors.length && <div className="text-sm text-slate-500">Create collector accounts in User Maintenance first.</div>}</div></section>}
 
     {!isAdmin && view==="MY_ROUTE" && <section className="panel overflow-hidden"><div className="border-b border-[var(--border)] p-5"><h3 className="font-semibold">Assigned clients</h3><p className="mt-1 text-sm text-slate-500">Sorted by area so nearby collections stay together.</p></div><div className="overflow-x-auto"><table className="data-table min-w-[900px]"><thead ><tr><th className="px-5 py-3">Client</th><th>Area / Mobile</th><th>Oldest due</th><th>Open month(s)</th><th className="text-right">Outstanding</th><th>Submission</th><th></th></tr></thead><tbody>{assignments.map((r) => { const sub = mySubByClient.get(r.clientId); return <tr key={r.id} ><td className="px-5 py-4"><b>{r.client.fullName}</b><div className="text-xs text-slate-500">{r.client.clientCode}</div></td><td>{r.client.area}<div className="text-xs text-slate-500">{r.client.primaryMobile ?? "No mobile"}</div></td><td>{r.client.oldestDueDate ? dateFmt.format(new Date(r.client.oldestDueDate)) : "—"}</td><td>{r.client.openPeriods.join(", ")}</td><td className="text-right font-semibold text-[#f09aa0]">{peso.format(r.client.outstanding)}</td><td>{sub ? <Badge value={sub.status}/> : <span className="text-slate-500">Not submitted</span>}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={() => void openSoa(r.clientId)} className="btn-ghost !min-h-8 !px-2">SOA</button><button disabled={Boolean(sub && ["PENDING", "APPROVING"].includes(sub.status))} onClick={() => setPayClient(r.client)} className="btn-ghost !min-h-8 !px-2 !text-[#8ed5ae] disabled:!text-slate-600">Record payment</button></div></td></tr>; })}{!assignments.length && <tr><td colSpan={7} className="p-0"><EmptyState title="No assigned clients" description="Ask the admin to assign an area or client for this collection date."/></td></tr>}</tbody></table></div></section>}
 
-    {((isAdmin && view==="APPROVALS") || (!isAdmin && view==="MY_SUBMISSIONS")) && <section className="panel overflow-hidden"><div className="flex items-center justify-between border-b border-[var(--border)] p-5"><div><h3 className="font-semibold">{isAdmin ? "Payment Approval Queue" : "My Payment Submissions"}</h3><p className="mt-1 text-sm text-slate-500">Official client balances change only after admin approval.</p></div></div><div className="overflow-x-auto"><table className="data-table min-w-[1050px]"><thead ><tr><th className="px-5 py-3">Client</th><th>Collector</th><th>Submitted</th><th>Method</th><th>Reference</th><th>Proof</th><th>Current due</th><th>Status</th><th></th></tr></thead><tbody>{submissions.map((s) => <tr key={s.id} ><td className="px-5 py-4"><b>{s.client.fullName}</b><div className="text-xs text-slate-500">{s.client.clientCode} · {s.client.area}</div></td><td>{s.submittedBy.displayName}</td><td><b>{peso.format(s.amount)}</b><div className="text-xs text-slate-500">{dateTimeFmt.format(new Date(s.submittedAt))}</div></td><td>{s.method.replaceAll("_", " ")}</td><td>{s.referenceNo ?? "—"}</td><td>{s.hasProof ? <button onClick={() => void viewProof(s)} className="btn-ghost !min-h-8 !px-2"><Camera size={14}/>View</button> : <span className="text-slate-600">None</span>}</td><td>{peso.format(s.currentOutstanding)}</td><td><Badge value={s.status}/>{s.reviewNotes && <div className="mt-1 max-w-52 text-xs text-slate-500">{s.reviewNotes}</div>}</td><td className="px-5 py-4">{isAdmin && ["PENDING", "NEEDS_INFO"].includes(s.status) ? <div className="flex gap-2"><button disabled={busy} onClick={() => void review(s, "APPROVE")} className="icon-btn !text-[#8ed5ae]" aria-label="Approve payment" title="Approve payment"><CheckCircle2 size={16}/></button><button disabled={busy} onClick={() => void review(s, "NEEDS_INFO")} className="icon-btn !text-orange-300" aria-label="Request information" title="Request information"><FileCheck2 size={16}/></button><button disabled={busy} onClick={() => void review(s, "REJECT")} className="icon-btn !text-[#f09aa0]" aria-label="Reject payment" title="Reject payment"><XCircle size={16}/></button></div> : s.status === "APPROVED" && s.paymentId ? <button onClick={() => void openReceipt(s.paymentId!)} className="btn-ghost !min-h-8 !px-2"><Printer size={14}/>Receipt</button> : null}</td></tr>)}{!submissions.length && <tr><td colSpan={9} className="p-0"><EmptyState title="No payment submissions" description={isAdmin ? "Collector payment submissions awaiting or completing review will appear here." : "Payments you submit for admin approval will appear here."}/></td></tr>}</tbody></table></div></section>}
+    {((isAdmin && view==="APPROVALS") || (!isAdmin && view==="MY_SUBMISSIONS")) && <section className="panel overflow-hidden"><div className="flex items-center justify-between border-b border-[var(--border)] p-5"><div><h3 className="font-semibold">{isAdmin ? "Payment Approval Queue" : "My Payment Submissions"}</h3><p className="mt-1 text-sm text-slate-500">Official client balances change only after admin approval.</p></div></div><div className="overflow-x-auto"><table className="data-table min-w-[1050px]"><thead ><tr><th className="px-5 py-3">Client</th><th>Collector</th><th>Submitted</th><th>Method</th><th>Reference</th><th>Proof</th><th>Current due</th><th>Status</th><th></th></tr></thead><tbody>{submissions.map((s) => <tr key={s.id} ><td className="px-5 py-4"><b>{s.client.fullName}</b><div className="text-xs text-slate-500">{s.client.clientCode} · {s.client.area}</div></td><td>{s.submittedBy.displayName}</td><td><b>{peso.format(s.amount)}</b><div className="text-xs text-slate-500">{dateTimeFmt.format(new Date(s.submittedAt))}</div></td><td>{s.method.replaceAll("_", " ")}</td><td>{s.referenceNo ?? "—"}</td><td>{s.hasProof ? <button onClick={() => void viewProof(s)} className="btn-ghost !min-h-8 !px-2"><Camera size={14}/>View</button> : <span className="text-slate-600">None</span>}</td><td>{peso.format(s.currentOutstanding)}</td><td><Badge value={s.status}/>{s.reviewNotes && <div className="mt-1 max-w-52 text-xs text-slate-500">{s.reviewNotes}</div>}</td><td className="px-5 py-4">{isAdmin && ["PENDING", "NEEDS_INFO"].includes(s.status) ? <div className="flex gap-2"><button disabled={busy} onClick={() => openReview(s, "APPROVE")} className="icon-btn !text-[#039855]" aria-label="Approve payment" title="Approve payment"><CheckCircle2 size={16}/></button><button disabled={busy} onClick={() => openReview(s, "NEEDS_INFO")} className="icon-btn !text-[#dc6803]" aria-label="Request information" title="Request information"><FileCheck2 size={16}/></button><button disabled={busy} onClick={() => openReview(s, "REJECT")} className="icon-btn !text-[#d92d20]" aria-label="Reject payment" title="Reject payment"><XCircle size={16}/></button></div> : s.status === "APPROVED" && s.paymentId ? <button onClick={() => void openReceipt(s.paymentId!)} className="btn-ghost !min-h-8 !px-2"><Printer size={14}/>Receipt</button> : null}</td></tr>)}{!submissions.length && <tr><td colSpan={9} className="p-0"><EmptyState title="No payment submissions" description={isAdmin ? "Collector payment submissions awaiting or completing review will appear here." : "Payments you submit for admin approval will appear here."}/></td></tr>}</tbody></table></div></section>}
+
+    <Dialog
+      open={Boolean(reviewTarget)}
+      title={reviewTarget?.decision==="APPROVE" ? "Approve collector payment" : reviewTarget?.decision==="REJECT" ? "Reject collector payment" : "Request more information"}
+      description={reviewTarget ? `${reviewTarget.submission.client.fullName} · ${reviewTarget.submission.submittedBy.displayName} · submitted ${peso.format(reviewTarget.submission.amount)}` : undefined}
+      onClose={() => { if (!busy) setReviewTarget(null); }}
+    >
+      {reviewTarget && <form onSubmit={submitReview} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="subpanel p-3"><div className="text-xs text-slate-500">Payment method</div><div className="mt-1 font-semibold">{reviewTarget.submission.method.replaceAll("_"," ")}</div></div>
+          <div className="subpanel p-3"><div className="text-xs text-slate-500">Current outstanding</div><div className="mt-1 font-semibold">{peso.format(reviewTarget.submission.currentOutstanding)}</div></div>
+        </div>
+        {reviewTarget.decision==="APPROVE" && <label className="field-label block">Approved amount<input name="approvedAmount" type="number" min="0.01" step="0.01" defaultValue={Number(reviewTarget.submission.amount)} className="field mt-1 w-full" required/></label>}
+        <label className="field-label block">
+          {reviewTarget.decision==="APPROVE" ? "Approval note (optional)" : reviewTarget.decision==="REJECT" ? "Reason for rejection" : "Information needed"}
+          <textarea name="reviewNotes" defaultValue={reviewTarget.submission.reviewNotes ?? ""} className="field mt-1 min-h-24 w-full" required={reviewTarget.decision!=="APPROVE"}/>
+        </label>
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+          <button type="button" onClick={() => setReviewTarget(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          <button disabled={busy} className={reviewTarget.decision==="REJECT" ? "btn-danger" : "primary-btn"}>
+            {busy ? "Saving..." : reviewTarget.decision==="APPROVE" ? "Approve payment" : reviewTarget.decision==="REJECT" ? "Reject submission" : "Request information"}
+          </button>
+        </div>
+      </form>}
+    </Dialog>
+
+    <Dialog
+      open={Boolean(removeAssignmentTarget)}
+      title="Remove from collection route"
+      description={removeAssignmentTarget ? `${removeAssignmentTarget.client.fullName} will be removed from this collector sheet only.` : undefined}
+      onClose={() => { if (!busy) setRemoveAssignmentTarget(null); }}
+    >
+      <div className="notice notice-warning">This does not change the subscriber billing status or balance.</div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={() => setRemoveAssignmentTarget(null)} disabled={busy} className="btn-secondary">Cancel</button>
+        <button type="button" onClick={() => void confirmRemoveAssignment()} disabled={busy} className="btn-danger">{busy ? "Removing..." : "Remove assignment"}</button>
+      </div>
+    </Dialog>
 
     {payClient && <div className="dialog-backdrop"><div className="dialog max-w-lg"><div className="dialog-header"><div><h3 className="font-bold">Submit Payment for Approval</h3><p className="mt-1 text-sm text-slate-500">{payClient.fullName} · outstanding {peso.format(payClient.outstanding)}</p></div><button onClick={() => setPayClient(null)} className="icon-btn" aria-label="Close payment dialog" title="Close"><X size={17}/></button></div><form onSubmit={submitPayment} className="dialog-body space-y-4"><label className="field-label block">Amount received<input name="amount" type="number" step="0.01" min="0.01" defaultValue={payClient.outstanding} className="field mt-1 w-full" required/></label><label className="field-label block">Payment method<select name="method" className="field mt-1 w-full" defaultValue="CASH"><option value="CASH">Cash</option><option value="GCASH">GCash</option><option value="BANK_TRANSFER">Bank Transfer</option><option value="OTHER">Other</option></select></label><label className="field-label block">Reference no. (GCash/bank)<input name="referenceNo" className="field mt-1 w-full"/></label><label className="field-label block">Proof of payment<input name="proof" type="file" accept="image/*,application/pdf" capture="environment" className="mt-2 block w-full text-sm text-slate-400"/><span className="mt-1 block text-xs text-slate-500">Required for GCash/bank; optional for cash. Max 5 MB.</span></label><label className="field-label block">Notes<textarea name="notes" className="field mt-1 min-h-20 w-full" placeholder="Cash received, sender name, special note..."/></label><Notice tone="warning">Submitting this does <b>not</b> mark the client paid. Admin must verify and approve it first.</Notice><button disabled={busy} className="primary-btn w-full"><Upload size={16}/>Submit for admin approval</button></form></div></div>}
   </div>;
