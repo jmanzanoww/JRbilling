@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Inbox, LoaderCircle } from "lucide-react";
+import { Card } from "./components/ui";
 
 type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 
@@ -17,7 +18,7 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
 }
 
 export function Metric({ label, value, note, tone = "neutral" }: { label: string; value: ReactNode; note?: string; tone?: Tone }) {
-  return <div className={`metric metric-${tone}`}><div className="metric-label">{label}</div><div className="metric-value">{value}</div>{note && <div className="metric-note">{note}</div>}</div>;
+  return <Card className={`metric metric-${tone}`}><div className="metric-label">{label}</div><div className="metric-value">{value}</div>{note && <div className="metric-note">{note}</div>}</Card>;
 }
 
 const statusTone: Record<string, Tone> = {
