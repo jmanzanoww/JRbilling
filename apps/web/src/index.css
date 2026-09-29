@@ -190,3 +190,12 @@ textarea { resize: vertical; }
 header {
   box-shadow: 0 1px 2px rgba(15,23,42,.025);
 }
+
+.nav-group-label {
+  padding: 0 10px;
+  font-size: .625rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
