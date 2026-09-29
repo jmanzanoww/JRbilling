@@ -2,11 +2,18 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowRightLeft, CheckCircle2, Network, Plus, RefreshCcw, Router, ShieldCheck, Wifi, XCircle } from "lucide-react";
 import { api } from "./api";
 import { EmptyState, Metric, Notice, StatusBadge } from "./ui";
+import { Dialog } from "./components/ui";
 import type { AreaRouterDefaultRow, AuthUser, MikrotikDeviceRow, NetworkActivationClient, NetworkMigrationRow, NetworkRecommendations } from "./types";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
 type Props = { authUser: AuthUser | null; live: boolean };
+type NetworkDialog =
+  | { type: "EDIT_DEVICE"; device: MikrotikDeviceRow }
+  | { type: "LINK_EXISTING"; client: NetworkActivationClient }
+  | { type: "ACTIVATE"; client: NetworkActivationClient }
+  | { type: "MIGRATE"; clientId: number; fullName: string; targets: Array<{id:number;name:string}>; defaultReason: string }
+  | null;
 
 export default function NetworkOps({ authUser, live }: Props) {
   const isAdmin = authUser?.role === "ADMIN";
@@ -21,6 +28,7 @@ export default function NetworkOps({ authUser, live }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [networkDialog, setNetworkDialog] = useState<NetworkDialog>(null);
 
   async function load() {
     if (!live || !isAdmin) return;
@@ -55,23 +63,7 @@ export default function NetworkOps({ authUser, live }: Props) {
   }
 
   async function editDevice(device: MikrotikDeviceRow) {
-    const baseUrl = prompt(`REST base URL for ${device.name}:`, device.baseUrl); if (!baseUrl) return;
-    const credentialKey = prompt(`Credential key for ${device.name} (used as MIKROTIK_<KEY>_USER/PASSWORD):`, device.credentialKey); if (!credentialKey) return;
-    const policy = prompt(`Enforcement policy for ${device.name}:\nWITH_CUT = grace/cut automation allowed\nNO_AUTO_CUT = trusted, never auto-cut\nMANUAL_ONLY = manual cut only`, device.enforcementPolicy);
-    if (!policy || !["WITH_CUT", "NO_AUTO_CUT", "MANUAL_ONLY"].includes(policy)) return;
-    const trustedRaw = prompt(`Trusted / good-payer tier? Type YES or NO.`, device.isTrustedTier ? "YES" : "NO");
-    if (!trustedRaw || !["YES", "NO"].includes(trustedRaw.trim().toUpperCase())) return;
-    const trusted = trustedRaw.trim().toUpperCase() === "YES";
-    if (trusted && policy !== "NO_AUTO_CUT") { setNotice("Trusted tier must use NO_AUTO_CUT policy."); return; }
-    const activeRaw = prompt(`Router active? Type YES or NO.`, device.isActive ? "YES" : "NO");
-    if (!activeRaw || !["YES", "NO"].includes(activeRaw.trim().toUpperCase())) return;
-    const active = activeRaw.trim().toUpperCase() === "YES";
-    setBusy(true);
-    try {
-      await api(`/network/devices/${device.id}`, { method: "PATCH", body: JSON.stringify({ baseUrl, credentialKey, enforcementPolicy: policy, isTrustedTier: trusted, isActive: active }) });
-      setNotice(`${device.name} policy updated. Existing billing history is unchanged.`);
-      await load();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Unable to update MikroTik policy."); } finally { setBusy(false); }
+    setNetworkDialog({ type: "EDIT_DEVICE", device });
   }
 
   async function saveAreaDefaults() {
@@ -82,42 +74,82 @@ export default function NetworkOps({ authUser, live }: Props) {
 
   async function linkExisting(client: NetworkActivationClient) {
     if (!activeDevices.length) { setNotice("Configure an active MikroTik device first."); return; }
-    const defaultId = client.mikrotikDeviceId && activeDevices.some(d => d.id === client.mikrotikDeviceId) ? client.mikrotikDeviceId : activeDevices[0].id;
-    const deviceRaw = prompt(`MikroTik device ID for ${client.fullName}:\n${activeDevices.map(d => `${d.id} = ${d.name} (${d.enforcementPolicy})`).join("\n")}`, String(defaultId)); if (!deviceRaw) return;
-    const deviceId = Number(deviceRaw); if (!activeDevices.some(d => d.id === deviceId)) { setNotice("Invalid MikroTik device ID."); return; }
-    const account = prompt("Existing PPPoE username on that MikroTik:", client.mikrotikAccount || ""); if (!account) return;
-    const password = prompt("Optional: enter the current PPPoE password so future router migration can be automated. Leave blank if unknown.", "") || undefined;
-    setBusy(true);
-    try {
-      const r = await api<{account:string;profile:string;networkStatus:string;passwordStored:boolean;device:{name:string}}>(`/clients/${client.id}/network/link-existing`, { method:"POST", body:JSON.stringify({ mikrotikDeviceId:deviceId, account, password }) });
-      setNotice(`${client.fullName} linked to ${r.device.name} · ${r.account} · profile ${r.profile}. ${r.passwordStored?"Migration credential stored securely.":"Password not stored; enter it before any future router migration."}`);
-      await load();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Unable to link existing PPPoE account."); } finally { setBusy(false); }
+    setNetworkDialog({ type: "LINK_EXISTING", client });
   }
 
   async function activate(client: NetworkActivationClient) {
     if (!activeDevices.length) { setNotice("Add an active MikroTik device first."); return; }
-    const defaultId = client.mikrotikDeviceId && activeDevices.some(d => d.id === client.mikrotikDeviceId) ? client.mikrotikDeviceId : activeDevices[0].id;
-    const deviceRaw = prompt(`MikroTik device ID for ${client.fullName}:\n${activeDevices.map(d => `${d.id} = ${d.name} (${d.enforcementPolicy})`).join("\n")}`, String(defaultId)); if (!deviceRaw) return;
-    const deviceId = Number(deviceRaw); if (!activeDevices.some(d => d.id === deviceId)) { setNotice("Invalid MikroTik device ID."); return; }
-    const account = prompt("PPPoE username:", client.mikrotikAccount || client.clientCode.toLowerCase().replace(/[^a-z0-9]/g, "")); if (!account) return;
-    const profile = prompt("MikroTik PPP profile:", client.mikrotikProfile || "default"); if (!profile) return;
-    const password = prompt("PPPoE password (leave blank to auto-generate):", "") || undefined;
-    setBusy(true);
-    try {
-      const r = await api<{password:string;generated:boolean;device:{name:string}}>(`/clients/${client.id}/network/activate`, { method: "POST", body: JSON.stringify({ mikrotikDeviceId: deviceId, account, profile, password }) });
-      setNotice(`Activated ${client.fullName} on ${r.device.name}. PPPoE password: ${r.password}${r.generated ? " (generated)" : ""}. Save/configure this on the client CPE.`); await load();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Activation failed."); } finally { setBusy(false); }
+    setNetworkDialog({ type: "ACTIVATE", client });
   }
 
   async function migrate(item: { clientId:number; fullName:string; targets:Array<{id:number;name:string}> }, defaultReason: string) {
     if (!item.targets.length) return;
-    const raw = prompt(`Destination MikroTik ID for ${item.fullName}:\n${item.targets.map(t => `${t.id} = ${t.name}`).join("\n")}`, String(item.targets[0].id)); if (!raw) return;
-    const toDeviceId = Number(raw); if (!item.targets.some(t => t.id === toDeviceId)) { setNotice("Choose one of the recommended destination routers."); return; }
-    const reason = prompt("Migration reason:", defaultReason); if (!reason) return;
+    setNetworkDialog({ type: "MIGRATE", clientId: item.clientId, fullName: item.fullName, targets: item.targets, defaultReason });
+  }
+
+  async function submitNetworkDialog(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!networkDialog) return;
+    const fd = new FormData(e.currentTarget);
     setBusy(true);
-    try { await api(`/clients/${item.clientId}/network/migrate`, { method: "POST", body: JSON.stringify({ toDeviceId, reason }) }); setNotice(`${item.fullName} migrated successfully.`); await load(); }
-    catch (e) { setNotice(e instanceof Error ? e.message : "Migration failed."); } finally { setBusy(false); }
+    try {
+      if (networkDialog.type === "EDIT_DEVICE") {
+        const baseUrl = String(fd.get("baseUrl") || "").trim();
+        const credentialKey = String(fd.get("credentialKey") || "").trim();
+        const enforcementPolicy = String(fd.get("enforcementPolicy"));
+        const isTrustedTier = fd.get("isTrustedTier") === "on";
+        const isActive = fd.get("isActive") === "on";
+        if (!baseUrl || !credentialKey) throw new Error("REST base URL and credential key are required.");
+        if (!["WITH_CUT", "NO_AUTO_CUT", "MANUAL_ONLY"].includes(enforcementPolicy)) throw new Error("Choose a valid enforcement policy.");
+        if (isTrustedTier && enforcementPolicy !== "NO_AUTO_CUT") throw new Error("Trusted tier must use NO_AUTO_CUT policy.");
+        await api(`/network/devices/${networkDialog.device.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ baseUrl, credentialKey, enforcementPolicy, isTrustedTier, isActive })
+        });
+        setNotice(`${networkDialog.device.name} policy updated. Existing billing history is unchanged.`);
+      } else if (networkDialog.type === "LINK_EXISTING") {
+        const client = networkDialog.client;
+        const mikrotikDeviceId = Number(fd.get("mikrotikDeviceId"));
+        const account = String(fd.get("account") || "").trim();
+        const password = String(fd.get("password") || "") || undefined;
+        if (!activeDevices.some(d => d.id === mikrotikDeviceId)) throw new Error("Choose an active MikroTik device.");
+        if (!account) throw new Error("Existing PPPoE username is required.");
+        const r = await api<{account:string;profile:string;networkStatus:string;passwordStored:boolean;device:{name:string}}>(`/clients/${client.id}/network/link-existing`, {
+          method: "POST",
+          body: JSON.stringify({ mikrotikDeviceId, account, password })
+        });
+        setNotice(`${client.fullName} linked to ${r.device.name} · ${r.account} · profile ${r.profile}. ${r.passwordStored?"Migration credential stored securely.":"Password not stored; enter it before any future router migration."}`);
+      } else if (networkDialog.type === "ACTIVATE") {
+        const client = networkDialog.client;
+        const mikrotikDeviceId = Number(fd.get("mikrotikDeviceId"));
+        const account = String(fd.get("account") || "").trim();
+        const profile = String(fd.get("profile") || "").trim();
+        const password = String(fd.get("password") || "") || undefined;
+        if (!activeDevices.some(d => d.id === mikrotikDeviceId)) throw new Error("Choose an active MikroTik device.");
+        if (!account || !profile) throw new Error("PPPoE username and profile are required.");
+        const r = await api<{password:string;generated:boolean;device:{name:string}}>(`/clients/${client.id}/network/activate`, {
+          method: "POST",
+          body: JSON.stringify({ mikrotikDeviceId, account, profile, password })
+        });
+        setNotice(`Activated ${client.fullName} on ${r.device.name}. PPPoE password: ${r.password}${r.generated ? " (generated)" : ""}. Save/configure this on the client CPE.`);
+      } else {
+        const toDeviceId = Number(fd.get("toDeviceId"));
+        const reason = String(fd.get("reason") || "").trim();
+        if (!networkDialog.targets.some(t => t.id === toDeviceId)) throw new Error("Choose one of the available destination routers.");
+        if (!reason) throw new Error("Migration reason is required.");
+        await api(`/clients/${networkDialog.clientId}/network/migrate`, {
+          method: "POST",
+          body: JSON.stringify({ toDeviceId, reason })
+        });
+        setNotice(`${networkDialog.fullName} migrated successfully.`);
+      }
+      setNetworkDialog(null);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Network action failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function moveRequired(client: NetworkActivationClient) {
