@@ -18,7 +18,7 @@ This file is the single source of truth for the product UI. New UI must reuse th
 
 **Operational, trustworthy, compact, local-business specific.** The product should feel like software used all day by an ISP billing/collection team, not a marketing dashboard. Visual hierarchy comes from typography, alignment, borders, data density, and consistent status language. Decorative effects are intentionally limited.
 
-The interface is light-first and intentionally follows a classic Bootstrap/AdminLTE-style back-office visual language: light gray page canvas, white bordered cards, a blue administrative top bar, a light gray sidebar, solid blue active navigation, compact forms, and traditional operational tables. It should feel familiar to users of business admin systems rather than like a modern SaaS marketing dashboard. Status colors are semantic only.
+The interface is light-first and follows a TailAdmin-inspired administrative visual language: white sidebar and top bar, very light gray application canvas, soft indigo/blue accent, rounded bordered cards, roomy but efficient tables, subtle icon tiles, muted gray supporting text, and restrained elevation. It should feel polished and modern while remaining a serious billing/operations system. Do not copy TailAdmin branding, demo content, or proprietary assets; use the visual language as inspiration only. Status colors are semantic only.
 
 ## Typography hierarchy
 
@@ -50,10 +50,11 @@ Default panel padding is 16–20px. Dense tables use 10–12px row padding. Do n
 
 ## Border radius
 
-- Inputs / buttons / badges: 6px
-- Panels / dialogs: 8px
-- Small circular controls only when the control is inherently circular
-- Avoid 16–24px card radii
+- Inputs / buttons: 8px
+- Panels / dialogs: 12–14px
+- Status badges: full pill radius
+- Icon tiles: 10–12px
+- Circular account/icon controls may be fully rounded
 
 ## Color tokens
 
@@ -160,7 +161,7 @@ Clicking the backdrop may close non-destructive dialogs. Critical destructive co
 
 ## Sidebar/navigation styles
 
-Desktop uses a persistent 232–240px light-gray sidebar with workflow-grouped navigation. The active route uses a solid Bootstrap-blue background with white text. The top header uses the same blue family to provide a clear administrative shell. Avoid pill navigation and decorative gradients.
+Desktop uses a persistent ~256px white sidebar with workflow-grouped navigation. The active route uses a pale indigo surface with indigo icon/text. The top bar is white with a bordered subscriber search field and compact account controls. Navigation should feel light and calm rather than dense or heavily colored. Avoid decorative gradients.
 
 Tablet/mobile uses a horizontally scrollable navigation row below the header so all routes remain reachable.
 
