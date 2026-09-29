@@ -20,8 +20,10 @@ Navigation is grouped by job function, not by database table:
 
 - **Overview**: Dashboard
 - **Billing & Collection**: Billing, Field Collection, Collections
+  - Field Collection is a sidebar submenu, not an in-page tab set. Admin children: Route Planner, Client Exceptions, Collector Sheets, Payment Approvals. Collector children: My Route, My Submissions.
 - **Subscriber Operations**: Subscriber Accounts, Service Actions
 - **Network Operations**: Network
+  - Network is a sidebar submenu, not one long page. Children: MikroTik Devices, Area Mapping, Existing PPPoE Linking, Activation Queue, Migration Required, Trusted Router, Migration History.
 - **Maintenance**: Subscriber Maintenance, User Maintenance, Data Import
 - **System**: System Settings, Backup/Restore, Automation/Integrations, queues, and audit
 
