@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum BillingStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+enum ServiceStatus {
+  ACTIVE
+  EXTENDED
+  FOR_CUT
+  CUT
+  RECONNECTED
+  INACTIVE
+}
+enum ServiceActionType {
+  EXTEND
+  MARK_FOR_CUT
+  CUT
+  RECONNECT
+  ACTIVATE
+  DEACTIVATE
+}
+enum PaymentMethod {
+  CASH
+  GCASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentSubmissionStatus {
+  PENDING
+  APPROVING
+  APPROVED
+  REJECTED
+  NEEDS_INFO
+}
+enum MessageStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+enum UserRole {
+  ADMIN
+  COLLECTOR
+  VIEWER
+}
+enum CreditTransactionType {
+  ADVANCE_PAYMENT
+  AUTO_APPLY
+  MANUAL_ADJUSTMENT
+}
+
+enum RouterJobAction {
+  DISABLE_PPPOE
+  ENABLE_PPPOE
+}
+
+enum RouterEnforcementPolicy {
+  WITH_CUT
+  NO_AUTO_CUT
+  MANUAL_ONLY
+}
+
+enum NetworkProvisioningStatus {
+  FOR_LINKING
+  FOR_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  FAILED
+  MIGRATION_REQUIRED
+}
+
+enum RouterMigrationStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+enum RouterJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model Client {
+  id                 Int             @id @default(autoincrement())
+  clientCode         String          @unique
+  legacyKey          String?         @unique
+  fullName           String
+  primaryMobile      String?
+  alternateMobile    String?
+  area               String
+  address            String?
+  dueDay             Int
+  monthlyRate        Decimal         @db.Decimal(10, 2)
+  creditBalance      Decimal         @default(0) @db.Decimal(10, 2)
+  serviceStatus      ServiceStatus   @default(ACTIVE)
+  allowNotifications Boolean         @default(true)
+  mikrotikAccount    String?
+  mikrotikProfile    String?
+  pppoeSecretEncrypted String? @db.Text
+  mikrotikDeviceId   Int?
+  networkStatus      NetworkProvisioningStatus @default(FOR_ACTIVATION)
+  networkActivatedAt DateTime?
+  installedAt        DateTime?
+  notes              String?         @db.Text
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  bills              Bill[]
+  payments           Payment[]
+  dueDateChanges     DueDateChange[]
+  serviceActions     ServiceAction[]
+  messages           MessageHistory[]
+  creditTransactions CreditTransaction[]
+  routerJobs         RouterJob[]
+  paymentSubmissions PaymentSubmission[]
+  collectionAssignments CollectionAssignment[]
+  mikrotikDevice     MikrotikDevice? @relation(fields: [mikrotikDeviceId], references: [id], onDelete: SetNull)
+  billExtensions     BillExtension[]
+  networkMigrations  NetworkMigration[]
+
+  @@index([fullName])
+  @@index([area])
+  @@index([dueDay])
+  @@index([serviceStatus])
+  @@index([mikrotikAccount])
+  @@index([mikrotikDeviceId, networkStatus])
+}
+
+model Bill {
+  id              Int            @id @default(autoincrement())
+  clientId        Int
+  periodStart     DateTime
+  periodLabel     String
+  originalDueDate DateTime
+  dueDate         DateTime
+  amountDue       Decimal        @db.Decimal(10, 2)
+  balance         Decimal        @db.Decimal(10, 2)
+  status          BillingStatus  @default(UNPAID)
+  legacyStatus    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  allocations     PaymentAllocation[]
+  dueDateChanges  DueDateChange[]
+  creditTransactions CreditTransaction[]
+  extensions      BillExtension[]
+
+  @@unique([clientId, periodStart])
+  @@index([dueDate, status])
+}
+
+model Payment {
+  id           Int           @id @default(autoincrement())
+  clientId     Int
+  receiptNo    String        @unique
+  paidAt       DateTime      @default(now())
+  amount       Decimal       @db.Decimal(10, 2)
+  method       PaymentMethod @default(CASH)
+  referenceNo  String?
+  notes        String?
+  receivedBy   String?
+  approvedBy   String?
+  createdAt    DateTime      @default(now())
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  allocations  PaymentAllocation[]
+  creditTransactions CreditTransaction[]
+  sourceSubmission PaymentSubmission?
+
+  @@index([clientId, paidAt])
+}
+
+model PaymentAllocation {
+  id        Int      @id @default(autoincrement())
+  paymentId Int
+  billId    Int
+  amount    Decimal  @db.Decimal(10, 2)
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, billId])
+}
+
+model CreditTransaction {
+  id           Int                   @id @default(autoincrement())
+  clientId     Int
+  paymentId    Int?
+  billId       Int?
+  type         CreditTransactionType
+  amount       Decimal               @db.Decimal(10, 2)
+  balanceAfter Decimal               @db.Decimal(10, 2)
+  notes        String?
+  createdAt    DateTime              @default(now())
+  client       Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  payment      Payment?              @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  bill         Bill?                 @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, createdAt])
+}
+
+model DueDateChange {
+  id          Int      @id @default(autoincrement())
+  clientId    Int
+  billId      Int?
+  oldDueDate  DateTime
+  newDueDate  DateTime
+  reason      String
+  notes       String?
+  changedBy   String?
+  changedAt   DateTime @default(now())
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  bill        Bill?    @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, changedAt])
+}
+
+model ServiceAction {
+  id                  Int               @id @default(autoincrement())
+  clientId            Int
+  type                ServiceActionType
+  effectiveAt         DateTime          @default(now())
+  previousStatus      ServiceStatus
+  nextStatus          ServiceStatus
+  outstandingAtAction Decimal           @db.Decimal(10, 2)
+  reason              String?
+  notes               String?
+  performedBy         String?
+  routerAttempted     Boolean           @default(false)
+  routerSucceeded     Boolean?
+  routerMessage       String?
+  client              Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  routerJobs          RouterJob[]
+
+  @@index([clientId, effectiveAt])
+}
+
+model MessageHistory {
+  id          Int           @id @default(autoincrement())
+  clientId    Int
+  channel     String        @default("SMS")
+  destination String
+  templateKey String?
+  body        String        @db.Text
+  status      MessageStatus @default(QUEUED)
+  errorMessage String?
+  dedupeKey   String?         @unique
+  sentAt      DateTime?
+  createdAt   DateTime      @default(now())
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([status, createdAt])
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  displayName String
+  pinHash     String?
+  role        UserRole @default(COLLECTOR)
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  sessions    AuthSession[]
+  paymentSubmissions PaymentSubmission[] @relation("SubmittedPayments")
+  reviewedPaymentSubmissions PaymentSubmission[] @relation("ReviewedPayments")
+  collectionAssignments CollectionAssignment[]
+  areaCollectorDefaults AreaCollectorDefault[]
+}
+
+model AuthSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PaymentSubmission {
+  id                Int                     @id @default(autoincrement())
+  clientId          Int
+  submittedByUserId Int
+  reviewedByUserId  Int?
+  paymentId         Int?                    @unique
+  amount            Decimal                 @db.Decimal(10, 2)
+  approvedAmount    Decimal?                @db.Decimal(10, 2)
+  method            PaymentMethod           @default(CASH)
+  referenceNo       String?
+  notes             String?                 @db.Text
+  proofBase64       String?                 @db.LongText
+  proofMime         String?
+  proofFileName     String?
+  status            PaymentSubmissionStatus @default(PENDING)
+  reviewNotes       String?                 @db.Text
+  submittedAt       DateTime                @default(now())
+  reviewedAt        DateTime?
+  client            Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  submittedBy       User                    @relation("SubmittedPayments", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy        User?                   @relation("ReviewedPayments", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  payment           Payment?                @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([status, submittedAt])
+  @@index([submittedByUserId, submittedAt])
+  @@index([clientId, submittedAt])
+}
+
+model CollectionAssignment {
+  id             Int      @id @default(autoincrement())
+  collectionDate DateTime @db.Date
+  collectorId    Int
+  clientId       Int
+  assignedBy     String?
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+  collector      User     @relation(fields: [collectorId], references: [id], onDelete: Cascade)
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionDate, clientId])
+  @@index([collectorId, collectionDate])
+  @@index([clientId, collectionDate])
+}
+
+
+model AreaCollectorDefault {
+  id          Int      @id @default(autoincrement())
+  area        String   @unique
+  collectorId Int
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  collector   User     @relation(fields: [collectorId], references: [id], onDelete: Cascade)
+
+  @@index([collectorId])
+}
+
+model SystemConfig {
+  id                       Int      @id @default(1)
+  autoBillingEnabled       Boolean  @default(true)
+  messagingEnabled         Boolean  @default(false)
+  reminderDaysBefore       Int      @default(2)
+  overdueReminderDays      Int      @default(1)
+  smsProvider              String   @default("LOG_ONLY")
+  smsWebhookUrl            String?
+  mikrotikEnabled          Boolean  @default(false)
+  mikrotikBaseUrl          String?
+  routerRetryEnabled       Boolean  @default(true)
+  routerRetryMinutes       Int      @default(15)
+  autoReconnectOnPayment   Boolean  @default(false)
+  automaticBackupEnabled   Boolean  @default(true)
+  defaultGraceDays         Int      @default(3)
+  dueDateReminderEnabled   Boolean  @default(true)
+  graceReminderEnabled     Boolean  @default(true)
+  finalWarningEnabled      Boolean  @default(true)
+  autoCutAfterGrace        Boolean  @default(false)
+  trustedQualificationMonths Int    @default(6)
+  trustedDowngradeUnpaidMonths Int  @default(2)
+  backupHour               Int      @default(2)
+  backupRetentionDays      Int      @default(30)
+  updatedAt                DateTime @updatedAt
+}
+
+model MikrotikDevice {
+  id                Int                     @id @default(autoincrement())
+  name              String                  @unique
+  baseUrl           String
+  credentialKey     String                  @unique
+  enforcementPolicy RouterEnforcementPolicy @default(WITH_CUT)
+  isTrustedTier     Boolean                 @default(false)
+  isActive          Boolean                 @default(true)
+  notes             String?                 @db.Text
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  clients           Client[]
+  areaDefaults      AreaRouterDefault[]
+  routerJobs        RouterJob[]
+  migrationsFrom    NetworkMigration[]      @relation("MigrationFrom")
+  migrationsTo      NetworkMigration[]      @relation("MigrationTo")
+
+  @@index([enforcementPolicy, isActive])
+}
+
+model AreaRouterDefault {
+  id               Int            @id @default(autoincrement())
+  area             String         @unique
+  mikrotikDeviceId Int
+  updatedBy        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  mikrotikDevice   MikrotikDevice @relation(fields: [mikrotikDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([mikrotikDeviceId])
+}
+
+model BillExtension {
+  id             Int      @id @default(autoincrement())
+  clientId       Int
+  billId         Int
+  extensionUntil DateTime
+  reason         String
+  notes          String?  @db.Text
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  bill           Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, extensionUntil])
+  @@index([billId, extensionUntil])
+}
+
+model NetworkMigration {
+  id           Int                   @id @default(autoincrement())
+  clientId     Int
+  fromDeviceId Int?
+  toDeviceId   Int
+  status       RouterMigrationStatus @default(PENDING)
+  reason       String
+  performedBy  String?
+  errorMessage String?               @db.Text
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime              @default(now())
+  client       Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fromDevice   MikrotikDevice?       @relation("MigrationFrom", fields: [fromDeviceId], references: [id], onDelete: SetNull)
+  toDevice     MikrotikDevice        @relation("MigrationTo", fields: [toDeviceId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, createdAt])
+  @@index([status, createdAt])
+}
+
+model RouterJob {
+  id              Int             @id @default(autoincrement())
+  clientId        Int
+  serviceActionId Int?
+  mikrotikDeviceId Int?
+  action          RouterJobAction
+  account         String
+  status          RouterJobStatus @default(PENDING)
+  attempts        Int             @default(0)
+  maxAttempts     Int             @default(10)
+  nextAttemptAt   DateTime        @default(now())
+  lastAttemptAt   DateTime?
+  lastError       String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  serviceAction   ServiceAction?  @relation(fields: [serviceActionId], references: [id], onDelete: SetNull)
+  mikrotikDevice  MikrotikDevice? @relation(fields: [mikrotikDeviceId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([clientId, createdAt])
+  @@index([serviceActionId])
+  @@index([mikrotikDeviceId, status, nextAttemptAt])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actor      String?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
