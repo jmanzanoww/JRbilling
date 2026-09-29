@@ -472,7 +472,7 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
           <textarea name="reviewNotes" defaultValue={reviewTarget.submission.reviewNotes ?? ""} className="field mt-1 min-h-24 w-full" required={reviewTarget.decision!=="APPROVE"}/>
         </label>
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <button type="button" onClick={() => setReviewTarget(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          
           <button disabled={busy} className={reviewTarget.decision==="REJECT" ? "btn-danger" : "primary-btn"}>
             {busy ? "Saving..." : reviewTarget.decision==="APPROVE" ? "Approve payment" : reviewTarget.decision==="REJECT" ? "Reject submission" : "Request information"}
           </button>
@@ -488,7 +488,7 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     >
       <div className="notice notice-warning">This does not change the subscriber billing status or balance.</div>
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={() => setRemoveAssignmentTarget(null)} disabled={busy} className="btn-secondary">Cancel</button>
+        
         <button type="button" onClick={() => void confirmRemoveAssignment()} disabled={busy} className="btn-danger">{busy ? "Removing..." : "Remove assignment"}</button>
       </div>
     </Dialog>
