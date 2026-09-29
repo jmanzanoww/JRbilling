@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, CheckCircle2, Network, Plus, RefreshCcw, Router, ShieldCheck, Wifi, XCircle } from "lucide-react";
+import { ArrowRightLeft, Network, Plus, RefreshCcw, Router, ShieldCheck, Wifi, XCircle } from "lucide-react";
 import { api } from "./api";
 import { EmptyState, Metric, Notice, StatusBadge } from "./ui";
 import { Dialog } from "./components/ui";
