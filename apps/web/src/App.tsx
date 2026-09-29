@@ -2,11 +2,11 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowLeft, CalendarClock, CheckCircle2, CircleDollarSign, ClipboardList, DatabaseBackup, FileSpreadsheet,
   History, LayoutDashboard, LockKeyhole, LogOut, MessageSquareText, Phone, Plus, Power, Printer, ReceiptText, RefreshCcw,
-  Router, Save, Search, Send, Settings, ShieldCheck, Signal, UserCog, UserRound, Users, WalletCards, Wifi, X
+  Router, Save, Search, Send, Settings, ShieldCheck, Signal, UserCog, UserRound, Users, WalletCards, Wifi, X, ChevronDown, ChevronRight
 } from "lucide-react";
 import { api, API_URL, publicApi, setAuthToken } from "./api";
-import FieldCollectionOps from "./FieldCollectionOps";
-import NetworkOps from "./NetworkOps";
+import FieldCollectionOps, { type FieldCollectionView } from "./FieldCollectionOps";
+import NetworkOps, { type NetworkView } from "./NetworkOps";
 import { EmptyState, LoadingState, Metric, StatusBadge } from "./ui";
 import { Dialog } from "./components/ui";
 import { demoClients, demoDashboard, demoLedgers } from "./demo";
@@ -123,6 +123,10 @@ function printReceipt(receipt: Receipt) {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const [fieldCollectionView, setFieldCollectionView] = useState<FieldCollectionView>("ROUTE");
+  const [networkView, setNetworkView] = useState<NetworkView>("DEVICES");
+  const [fieldMenuOpen, setFieldMenuOpen] = useState(false);
+  const [networkMenuOpen, setNetworkMenuOpen] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard>(clone(demoDashboard));
   const [clients, setClients] = useState<ClientRow[]>(clone(demoClients));
   const [demoLedgerState, setDemoLedgerState] = useState<Record<number, Ledger>>(()=>clone(demoLedgers));
@@ -175,6 +179,13 @@ export default function App() {
   useEffect(()=>{ if(authUser) void refresh(); },[authUser]);
   useEffect(()=>{ if(tab==="Admin"||tab==="User Maintenance") void refreshAdmin(); },[tab,live,authUser]);
   useEffect(()=>{ if(authUser) setOperator(authUser.displayName); },[authUser]);
+  useEffect(()=>{
+    if(authUser?.role==="COLLECTOR"){
+      setFieldCollectionView("MY_ROUTE");
+    }else if(authUser?.role==="ADMIN" && (fieldCollectionView==="MY_ROUTE"||fieldCollectionView==="MY_SUBMISSIONS")){
+      setFieldCollectionView("ROUTE");
+    }
+  },[authUser?.role]);
 
   const filtered=useMemo(()=>clients.filter(c=>`${c.clientCode} ${c.fullName} ${c.area} ${c.primaryMobile??""} ${c.mikrotikAccount??""}`.toLowerCase().includes(q.toLowerCase())),[clients,q]);
   const operationalFiltered=useMemo(()=>filtered.filter(c=>c.serviceStatus!=="INACTIVE"),[filtered]);
@@ -383,6 +394,31 @@ export default function App() {
   const canCollect=!live || authUser?.role==="ADMIN" || authUser?.role==="COLLECTOR";
   const isAdmin=!live || authUser?.role==="ADMIN";
   const visibleNav = nav.filter(n=>isAdmin||(!(n.key==="Admin"||n.key==="Import"||n.key==="Network"||n.key==="Subscriber Maintenance"||n.key==="User Maintenance")&&!(authUser?.role==="VIEWER"&&n.key==="Field Collection")));
+  const fieldCollectionMenu: Array<{key:FieldCollectionView;label:string}> = isAdmin
+    ? [
+        {key:"ROUTE",label:"Route Planner"},
+        {key:"EXCEPTIONS",label:"Client Exceptions"},
+        {key:"SHEETS",label:"Collector Sheets"},
+        {key:"APPROVALS",label:"Payment Approvals"}
+      ]
+    : authUser?.role==="COLLECTOR"
+      ? [
+          {key:"MY_ROUTE",label:"My Route"},
+          {key:"MY_SUBMISSIONS",label:"My Submissions"}
+        ]
+      : [];
+  const networkMenu: Array<{key:NetworkView;label:string}> = [
+    {key:"DEVICES",label:"MikroTik Devices"},
+    {key:"AREA_MAPPING",label:"Area Mapping"},
+    {key:"LINKING",label:"Existing PPPoE Linking"},
+    {key:"ACTIVATION",label:"Activation Queue"},
+    {key:"MIGRATION_REQUIRED",label:"Migration Required"},
+    {key:"TRUSTED",label:"Trusted Router"},
+    {key:"HISTORY",label:"Migration History"}
+  ];
+  const fieldCollectionLabel=fieldCollectionMenu.find(item=>item.key===fieldCollectionView)?.label??"Field Collection";
+  const networkLabel=networkMenu.find(item=>item.key===networkView)?.label??"Network";
+  const pageLabel=selected?.fullName??(tab==="Field Collection"?fieldCollectionLabel:tab==="Network"?networkLabel:nav.find(item=>item.key===tab)?.label??tab);
 
   if(!authReady) return <div className="flex min-h-screen items-center justify-center text-slate-300"><div className="panel p-6">Loading ISP Billing...</div></div>;
   if(backendOnline&&!authUser) return <div className="flex min-h-screen items-center justify-center p-4 text-slate-100"><div className="panel w-full max-w-sm p-6"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center text-[var(--accent)]"><LockKeyhole size={23}/></div><div><h1 className="text-xl font-bold">{needsBootstrap?"Create system admin":"ISP Billing Login"}</h1><p className="text-sm text-slate-500">Secure local administration</p></div></div>{notice&&<div className="mt-5 rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{notice}</div>}<form onSubmit={submitAuth} className="mt-6 space-y-4">{needsBootstrap&&<label className="field-label block">Display name<input name="displayName" className="field mt-1 w-full" required/></label>}<label className="field-label block">Username<input name="username" autoComplete="username" className="field mt-1 w-full" required/></label><label className="field-label block">PIN<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete={needsBootstrap?"new-password":"current-password"} className="field mt-1 w-full" required/></label><button disabled={busy} className="primary-btn w-full"><LockKeyhole size={16}/>{busy?"Please wait...":needsBootstrap?"Create admin & sign in":"Sign in"}</button></form><p className="mt-5 text-xs leading-5 text-slate-500">PIN is stored as a salted hash. Sessions expire after 12 hours.</p></div></div>;
