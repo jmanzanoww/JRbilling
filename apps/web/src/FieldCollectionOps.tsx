@@ -78,13 +78,13 @@ function printReceipt(receipt: Receipt) {
   w.document.close();
 }
 
-type Props = { authUser: AuthUser | null; live: boolean };
+export type FieldCollectionView = "ROUTE" | "EXCEPTIONS" | "SHEETS" | "APPROVALS" | "MY_ROUTE" | "MY_SUBMISSIONS";
+type Props = { authUser: AuthUser | null; live: boolean; view: FieldCollectionView };
 type AreaPlan = { area: string; clients: CollectionCandidate[]; total: number };
-type FieldCollectionView = "ROUTE" | "EXCEPTIONS" | "SHEETS" | "APPROVALS" | "MY_ROUTE" | "MY_SUBMISSIONS";
 type ReviewDecision = "APPROVE" | "REJECT" | "NEEDS_INFO";
 type ReviewTarget = { submission: PaymentSubmissionRow; decision: ReviewDecision } | null;
 
-export default function FieldCollectionOps({ authUser, live }: Props) {
+export default function FieldCollectionOps({ authUser, live, view }: Props) {
   const isAdmin = authUser?.role === "ADMIN";
   const [date, setDate] = useState(() => localDate(isAdmin ? 1 : 0));
   const [mode, setMode] = useState<CollectionCandidateMode>("OVERDUE_NEXT_3_DAYS");
@@ -107,7 +107,6 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
   const [payClient, setPayClient] = useState<CollectionAssignmentRow["client"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [view, setView] = useState<FieldCollectionView>(() => isAdmin ? "ROUTE" : "MY_ROUTE");
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget>(null);
   const [removeAssignmentTarget, setRemoveAssignmentTarget] = useState<CollectionAssignmentRow | null>(null);
 
@@ -181,9 +180,6 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, authUser?.id, isAdmin]);
 
-  useEffect(() => {
-    setView(isAdmin ? "ROUTE" : "MY_ROUTE");
-  }, [isAdmin]);
 
   const collectors = useMemo(() => users.filter((u) => u.role === "COLLECTOR" && u.isActive), [users]);
   const areas = useMemo(() => [...new Set(candidates.map((c) => c.area))].sort(), [candidates]);
@@ -202,18 +198,6 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
   const eligibleTotal = useMemo(() => candidates.reduce((sum, client) => sum + money(client.outstanding), 0), [candidates]);
   const pendingSubmissionCount = useMemo(() => submissions.filter((s) => ["PENDING", "NEEDS_INFO"].includes(s.status)).length, [submissions]);
   const myAssignmentCount = assignments.length;
-
-  const workspaceTabs = isAdmin
-    ? [
-        { key: "ROUTE" as const, label: "Route Planner", note: `${areaPlans.length} areas · ${candidates.length} clients` },
-        { key: "EXCEPTIONS" as const, label: "Client Exceptions", note: "Individual overrides" },
-        { key: "SHEETS" as const, label: "Collector Sheets", note: `${assignments.length} assigned` },
-        { key: "APPROVALS" as const, label: "Payment Approvals", note: pendingSubmissionCount ? `${pendingSubmissionCount} needs review` : "No pending review" }
-      ]
-    : [
-        { key: "MY_ROUTE" as const, label: "My Route", note: `${myAssignmentCount} assigned` },
-        { key: "MY_SUBMISSIONS" as const, label: "My Submissions", note: `${submissions.length} submission(s)` }
-      ];
 
   const criteriaLabel = useMemo(() => {
     if (mode !== "CUSTOM") return modeLabels[mode];
@@ -389,26 +373,25 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     <section className="panel p-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="flex items-center gap-2"><ClipboardList size={18} className="text-slate-400"/><h2 className="text-base font-semibold">{isAdmin ? "Collection Route Builder" : "My Collection List"}</h2></div>
-          <p className="mt-1 text-sm text-slate-400">{isAdmin ? "Plan tomorrow's route, handle exceptions, print collector sheets, and review submitted payments in separate workspaces." : `Route for ${fmtDateInput(date)} · only clients assigned to your account are shown.`}</p>
+          <div className="flex items-center gap-2"><ClipboardList size={18} className="text-slate-400"/><h2 className="text-base font-semibold">{
+            view==="ROUTE" ? "Route Planner" :
+            view==="EXCEPTIONS" ? "Client Exceptions" :
+            view==="SHEETS" ? "Collector Sheets" :
+            view==="APPROVALS" ? "Payment Approvals" :
+            view==="MY_SUBMISSIONS" ? "My Submissions" : "My Route"
+          }</h2></div>
+          <p className="mt-1 text-sm text-slate-400">{isAdmin
+            ? view==="ROUTE" ? "Choose collection criteria and assign areas to collectors."
+              : view==="EXCEPTIONS" ? "Handle one-off client assignment exceptions without changing normal area ownership."
+              : view==="SHEETS" ? "Review assigned routes and print collector sheets by collector."
+              : "Review payment submissions from collectors before posting them to the official ledger."
+            : view==="MY_SUBMISSIONS" ? "Review the payments you submitted for admin approval."
+              : `Route for ${fmtDateInput(date)} · only clients assigned to your account are shown.`}</p>
           {!isAdmin && assignedDates.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-500">Assigned dates:</span>{[...assignedDates].sort((a,b)=>a.localeCompare(b)).slice(0,8).map((assignedDate)=><button key={assignedDate} onClick={()=>setDate(assignedDate)} className={`btn-secondary !min-h-8 !px-2.5 text-xs ${date===assignedDate?"!border-[var(--accent)] !bg-[var(--accent-soft)] !text-[var(--accent)]":""}`}>{fmtDateInput(assignedDate)}</button>)}</div>}
         </div>
         <div className="flex flex-wrap items-end gap-2"><label className="field-label">Collection date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field mt-1 block"/></label><button onClick={() => void (isAdmin ? load() : Promise.all([load(), loadAssignedDates()]))} className="action-btn"><RefreshCcw size={15}/>Refresh</button></div>
       </div>
       {!isAdmin && assignedDates.length===0 && <div className="notice notice-info mt-4">No collection dates are currently assigned to your account. Ask the admin to assign your route first.</div>}
-    </section>
-
-    <section className="panel overflow-hidden">
-      <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-white px-3 pt-3">
-        {workspaceTabs.map((item) => <button
-          key={item.key}
-          onClick={() => setView(item.key)}
-          className={`min-w-max border-b-2 px-4 py-3 text-left transition-colors ${view===item.key?"border-[var(--accent)] text-[var(--accent)]":"border-transparent text-slate-500 hover:text-slate-900"}`}
-        >
-          <div className="text-sm font-semibold">{item.label}</div>
-          <div className="mt-0.5 text-[11px] text-slate-500">{item.note}</div>
-        </button>)}
-      </div>
     </section>
 
     {isAdmin && view==="ROUTE" && <>
