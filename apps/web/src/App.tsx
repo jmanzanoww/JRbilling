@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowLeft, CalendarClock, CircleDollarSign, ClipboardList, DatabaseBackup, FileSpreadsheet,
   History, LayoutDashboard, LockKeyhole, LogOut, MessageSquareText, Phone, Plus, Power, Printer, ReceiptText, RefreshCcw,
-  Router, Save, Search, Send, Settings, ShieldCheck, Signal, UserCog, UserRound, Users, WalletCards, Wifi, X, ChevronDown, ChevronRight
+  Router, Save, Search, Send, Settings, ShieldCheck, Signal, UserCog, UserRound, Users, WalletCards, Wifi, X, ChevronDown, ChevronRight, Menu
 } from "lucide-react";
 import { api, API_URL, publicApi, setAuthToken } from "./api";
 import FieldCollectionOps, { type FieldCollectionView } from "./FieldCollectionOps";
@@ -127,6 +127,7 @@ export default function App() {
   const [networkView, setNetworkView] = useState<NetworkView>("DEVICES");
   const [fieldMenuOpen, setFieldMenuOpen] = useState(false);
   const [networkMenuOpen, setNetworkMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard>(clone(demoDashboard));
   const [clients, setClients] = useState<ClientRow[]>(clone(demoClients));
   const [demoLedgerState, setDemoLedgerState] = useState<Record<number, Ledger>>(()=>clone(demoLedgers));
@@ -186,6 +187,12 @@ export default function App() {
       setFieldCollectionView("ROUTE");
     }
   },[authUser?.role]);
+  useEffect(()=>{
+    if(!mobileMenuOpen)return;
+    const previous=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return ()=>{document.body.style.overflow=previous;};
+  },[mobileMenuOpen]);
 
   const filtered=useMemo(()=>clients.filter(c=>`${c.clientCode} ${c.fullName} ${c.area} ${c.primaryMobile??""} ${c.mikrotikAccount??""}`.toLowerCase().includes(q.toLowerCase())),[clients,q]);
   const operationalFiltered=useMemo(()=>filtered.filter(c=>c.serviceStatus!=="INACTIVE"),[filtered]);
@@ -423,6 +430,7 @@ export default function App() {
   function selectPrimaryTab(key: Tab){
     setTab(key);
     setSelected(null);
+    setMobileMenuOpen(false);
     if(key==="Field Collection"){
       setFieldMenuOpen(true);
       if(authUser?.role==="COLLECTOR" && !["MY_ROUTE","MY_SUBMISSIONS"].includes(fieldCollectionView)) setFieldCollectionView("MY_ROUTE");
@@ -483,10 +491,64 @@ export default function App() {
     <div className="system-status-card mt-7"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">System status</div><div className={`mt-2 flex items-center gap-2 text-sm font-semibold ${live?"text-[#039855]":"text-[#dc6803]"}`}><span className={`h-2 w-2 rounded-full ${live?"bg-emerald-500":"bg-amber-500"}`}/>{live?"Live MySQL":"Interactive demo"}</div></div>
   </aside>
 
-    <main className="lg:ml-64"><header className="admin-topbar sticky top-0 z-20 border-b px-4 py-3 md:px-6"><div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4"><div className="flex min-w-0 flex-1 items-center gap-4"><div className="admin-topbar-search hidden sm:block"><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setTab("Clients");setSelected(null)}}} placeholder="Search subscriber, area, mobile..."/></div><div className="topbar-page hidden xl:block">{pageLabel}</div></div><div className="flex items-center gap-2">{live&&authUser?<><button onClick={()=>void refresh()} className="icon-btn" aria-label="Refresh data" title="Refresh data"><RefreshCcw size={17}/></button><button onClick={()=>void changeOwnPin()} title="Change PIN" className="icon-btn"><LockKeyhole size={17}/></button><div className="hidden h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#465fff] sm:flex">{authUser.displayName.trim().slice(0,1).toUpperCase()}</div><div className="admin-user-box hidden px-1 py-1 text-left sm:block"><div className="text-sm font-semibold text-slate-900">{authUser.displayName}</div><div className="text-[11px] text-slate-500">{authUser.role}</div></div><button onClick={()=>void logout()} title="Log out" className="icon-btn"><LogOut size={17}/></button></>:<><div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-[#dc6803]">Demo Mode</div><button onClick={()=>void refresh()} className="icon-btn" aria-label="Refresh data" title="Refresh data"><RefreshCcw size={17}/></button></>}</div></div></header>
-    <nav className="mobile-nav lg:hidden" aria-label="Primary navigation"><div className="mobile-nav-inner">{visibleNav.map(n=><button key={n.key} onClick={()=>selectPrimaryTab(n.key)} className={`nav-item ${tab===n.key?"nav-item-active":""}`}><n.icon size={15}/>{n.label}</button>)}</div></nav>
-    {tab==="Field Collection"&&fieldCollectionMenu.length>0&&<div className="mobile-section-select lg:hidden"><label>Field Collection section<select value={fieldCollectionView} onChange={e=>setFieldCollectionView(e.target.value as FieldCollectionView)}>{fieldCollectionMenu.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>}
-    {tab==="Network"&&isAdmin&&<div className="mobile-section-select lg:hidden"><label>Network section<select value={networkView} onChange={e=>setNetworkView(e.target.value as NetworkView)}>{networkMenu.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>}
+    <main className="lg:ml-64">
+    <header className="admin-topbar sticky top-0 z-30 border-b px-3 py-2.5 sm:px-4 sm:py-3 md:px-6">
+      <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button onClick={()=>setMobileMenuOpen(true)} className="icon-btn lg:hidden" aria-label="Open navigation" title="Menu"><Menu size={20}/></button>
+          <div className="min-w-0 lg:hidden">
+            <div className="truncate text-sm font-bold text-slate-900">JR Billing</div>
+            <div className="truncate text-[11px] text-slate-500">{pageLabel}</div>
+          </div>
+          <div className="admin-topbar-search hidden lg:block"><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setTab("Clients");setSelected(null)}}} placeholder="Search subscriber, area, mobile..."/></div>
+          <div className="topbar-page hidden xl:block">{pageLabel}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {live&&authUser?<><button onClick={()=>void refresh()} className="icon-btn" aria-label="Refresh data" title="Refresh data"><RefreshCcw size={17}/></button><button onClick={()=>void changeOwnPin()} title="Change PIN" className="icon-btn hidden sm:inline-flex"><LockKeyhole size={17}/></button><div className="hidden h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#465fff] sm:flex">{authUser.displayName.trim().slice(0,1).toUpperCase()}</div><div className="admin-user-box hidden px-1 py-1 text-left md:block"><div className="text-sm font-semibold text-slate-900">{authUser.displayName}</div><div className="text-[11px] text-slate-500">{authUser.role}</div></div><button onClick={()=>void logout()} title="Log out" className="icon-btn"><LogOut size={17}/></button></>:<><div className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-[#dc6803] sm:block">Demo Mode</div><button onClick={()=>void refresh()} className="icon-btn" aria-label="Refresh data" title="Refresh data"><RefreshCcw size={17}/></button></>}
+        </div>
+      </div>
+    </header>
+
+    {mobileMenuOpen&&<div className="mobile-drawer-layer lg:hidden" role="presentation">
+      <button className="mobile-drawer-backdrop" onClick={()=>setMobileMenuOpen(false)} aria-label="Close navigation"/>
+      <aside className="mobile-drawer" aria-label="Mobile navigation">
+        <div className="mobile-drawer-header">
+          <div className="flex items-center gap-3"><div className="brand-mark"><Wifi size={18}/></div><div><div className="font-bold text-slate-900">JR Billing</div><div className="text-xs text-slate-500">ISP Administration</div></div></div>
+          <button onClick={()=>setMobileMenuOpen(false)} className="icon-btn" aria-label="Close navigation" title="Close"><X size={18}/></button>
+        </div>
+        <div className="mobile-drawer-account">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#465fff]">{authUser?.displayName?.trim().slice(0,1).toUpperCase()??"?"}</div>
+          <div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-900">{authUser?.displayName??"Local user"}</div><div className="text-xs text-slate-500">{authUser?.role??(live?"USER":"DEMO")}</div></div>
+        </div>
+        <div className="mobile-drawer-nav">{navGroups.map(group=>{
+          const items=visibleNav.filter(n=>group.keys.includes(n.key));
+          if(!items.length)return null;
+          return <div key={group.label} className="mobile-drawer-group">
+            <div className="nav-group-label">{group.label}</div>
+            <div className="mt-1 space-y-1">{items.map(n=>{
+              if(n.key==="Field Collection"){
+                return <div key={n.key}>
+                  <button onClick={()=>setFieldMenuOpen(v=>!v)} className={`nav-item ${tab==="Field Collection"?"nav-item-active":""}`}><n.icon size={17}/><span className="flex-1 text-left">{n.label}</span>{fieldMenuOpen?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>
+                  {fieldMenuOpen&&fieldCollectionMenu.length>0&&<div className="nav-submenu">{fieldCollectionMenu.map(item=><button key={item.key} onClick={()=>{setTab("Field Collection");setFieldCollectionView(item.key);setSelected(null);setMobileMenuOpen(false)}} className={`nav-subitem ${tab==="Field Collection"&&fieldCollectionView===item.key?"nav-subitem-active":""}`}>{item.label}</button>)}</div>}
+                </div>;
+              }
+              if(n.key==="Network"){
+                return <div key={n.key}>
+                  <button onClick={()=>setNetworkMenuOpen(v=>!v)} className={`nav-item ${tab==="Network"?"nav-item-active":""}`}><n.icon size={17}/><span className="flex-1 text-left">{n.label}</span>{networkMenuOpen?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>
+                  {networkMenuOpen&&<div className="nav-submenu">{networkMenu.map(item=><button key={item.key} onClick={()=>{setTab("Network");setNetworkView(item.key);setSelected(null);setMobileMenuOpen(false)}} className={`nav-subitem ${tab==="Network"&&networkView===item.key?"nav-subitem-active":""}`}>{item.label}</button>)}</div>}
+                </div>;
+              }
+              return <button key={n.key} onClick={()=>selectPrimaryTab(n.key)} className={`nav-item ${tab===n.key?"nav-item-active":""}`}><n.icon size={17}/>{n.label}</button>;
+            })}</div>
+          </div>;
+        })}</div>
+        <div className="mobile-drawer-footer">
+          <div className="system-status-card"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">System status</div><div className={`mt-2 flex items-center gap-2 text-sm font-semibold ${live?"text-[#039855]":"text-[#dc6803]"}`}><span className={`h-2 w-2 rounded-full ${live?"bg-emerald-500":"bg-amber-500"}`}/>{live?"Live MySQL":"Interactive demo"}</div></div>
+          {live&&authUser&&<div className="mt-2 grid grid-cols-2 gap-2"><button onClick={()=>{setMobileMenuOpen(false);void changeOwnPin()}} className="btn-secondary collector-touch"><LockKeyhole size={16}/>Change PIN</button><button onClick={()=>void logout()} className="btn-secondary collector-touch"><LogOut size={16}/>Log out</button></div>}
+        </div>
+      </aside>
+    </div>}
+
     {authUser?.role==="COLLECTOR"&&<nav className="collector-bottom-nav lg:hidden" aria-label="Collector quick navigation">
       <button onClick={()=>selectPrimaryTab("Dashboard")} className={tab==="Dashboard"?"active":""}><LayoutDashboard size={19}/><span>Home</span></button>
       <button onClick={()=>{setTab("Field Collection");setFieldCollectionView("MY_ROUTE");setSelected(null)}} className={tab==="Field Collection"&&fieldCollectionView==="MY_ROUTE"?"active":""}><ClipboardList size={19}/><span>My Route</span></button>
