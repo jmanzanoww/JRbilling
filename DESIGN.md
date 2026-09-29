@@ -6,7 +6,7 @@ This file is the single source of truth for the product UI. New UI must reuse th
 
 **Operational, trustworthy, compact, local-business specific.** The product should feel like software used all day by an ISP billing/collection team, not a marketing dashboard. Visual hierarchy comes from typography, alignment, borders, data density, and consistent status language. Decorative effects are intentionally limited.
 
-The interface is dark-first for long desktop sessions. It uses a graphite/navy shell, neutral surfaces, and a single blue action accent. Status colors are semantic only.
+The interface is light-first and optimized for day-to-day back-office administration. It uses a soft gray application canvas, white navigation and work surfaces, a single blue primary action accent, compact operational tables, and restrained shadows. Status colors are semantic only.
 
 ## Typography hierarchy
 
@@ -82,7 +82,7 @@ Borders are the main structural separator. Use 1px neutral borders between navig
 
 ## Shadow usage
 
-Panels have no default shadow. Dialogs may use one restrained elevation shadow. Focus rings are not considered decorative shadows.
+Panels may use a barely visible 1px/2px administrative elevation shadow in addition to borders. Dialogs may use one restrained elevation shadow. Focus rings are not considered decorative shadows.
 
 ## Button styles
 
@@ -148,7 +148,7 @@ Clicking the backdrop may close non-destructive dialogs. Critical destructive co
 
 ## Sidebar/navigation styles
 
-Desktop uses a persistent 232px sidebar with a compact product identity, grouped navigation, and a restrained environment indicator. Active state is shown by a subtle surface plus a 2px accent edge, not a glowing pill.
+Desktop uses a persistent 232–240px white sidebar with a compact product identity, workflow-grouped navigation (Overview, Customer & Billing, Operations, System), and a restrained environment indicator. Active state uses a pale blue surface plus a 2px blue accent edge, not a pill or glow.
 
 Tablet/mobile uses a horizontally scrollable navigation row below the header so all routes remain reachable.
 
