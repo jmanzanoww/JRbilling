@@ -420,6 +420,17 @@ export default function App() {
   const networkLabel=networkMenu.find(item=>item.key===networkView)?.label??"Network";
   const pageLabel=selected?.fullName??(tab==="Field Collection"?fieldCollectionLabel:tab==="Network"?networkLabel:nav.find(item=>item.key===tab)?.label??tab);
 
+  function selectPrimaryTab(key: Tab){
+    setTab(key);
+    setSelected(null);
+    if(key==="Field Collection"){
+      setFieldMenuOpen(true);
+      if(authUser?.role==="COLLECTOR" && !["MY_ROUTE","MY_SUBMISSIONS"].includes(fieldCollectionView)) setFieldCollectionView("MY_ROUTE");
+      if(isAdmin && ["MY_ROUTE","MY_SUBMISSIONS"].includes(fieldCollectionView)) setFieldCollectionView("ROUTE");
+    }
+    if(key==="Network") setNetworkMenuOpen(true);
+  }
+
   if(!authReady) return <div className="flex min-h-screen items-center justify-center text-slate-300"><div className="panel p-6">Loading ISP Billing...</div></div>;
   if(backendOnline&&!authUser) return <div className="flex min-h-screen items-center justify-center p-4 text-slate-100"><div className="panel w-full max-w-sm p-6"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center text-[var(--accent)]"><LockKeyhole size={23}/></div><div><h1 className="text-xl font-bold">{needsBootstrap?"Create system admin":"ISP Billing Login"}</h1><p className="text-sm text-slate-500">Secure local administration</p></div></div>{notice&&<div className="mt-5 rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{notice}</div>}<form onSubmit={submitAuth} className="mt-6 space-y-4">{needsBootstrap&&<label className="field-label block">Display name<input name="displayName" className="field mt-1 w-full" required/></label>}<label className="field-label block">Username<input name="username" autoComplete="username" className="field mt-1 w-full" required/></label><label className="field-label block">PIN<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete={needsBootstrap?"new-password":"current-password"} className="field mt-1 w-full" required/></label><button disabled={busy} className="primary-btn w-full"><LockKeyhole size={16}/>{busy?"Please wait...":needsBootstrap?"Create admin & sign in":"Sign in"}</button></form><p className="mt-5 text-xs leading-5 text-slate-500">PIN is stored as a salted hash. Sessions expire after 12 hours.</p></div></div>;
 
