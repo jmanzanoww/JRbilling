@@ -15,6 +15,9 @@ Prefer reusable primitives such as `Button`, `Input`, `Textarea`, `Select`, `Car
 This file is the single source of truth for the product UI. New UI must reuse these tokens and patterns before introducing a new visual pattern.
 
 ## Mobile and field use
+- Mobile primary navigation uses a **burger-triggered left drawer**, never a horizontally scrolling top menu.
+- Field Collection and Network keep their nested submenu structure inside the mobile drawer; in-content tab bars/dropdowns should not duplicate that navigation.
+- Collector bottom navigation remains as quick access only; the burger drawer is the complete navigation surface.
 
 JRbilling must be usable on phones, with **collector workflows treated as mobile-first**.
 
