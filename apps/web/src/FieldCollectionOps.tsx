@@ -153,6 +153,10 @@ export default function FieldCollectionOps({ authUser, live }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, mode, dueFrom, dueTo, includeOverdue, includeExtended, live, authUser?.id]);
 
+  useEffect(() => {
+    setView(isAdmin ? "ROUTE" : "MY_ROUTE");
+  }, [isAdmin]);
+
   const collectors = useMemo(() => users.filter((u) => u.role === "COLLECTOR" && u.isActive), [users]);
   const areas = useMemo(() => [...new Set(candidates.map((c) => c.area))].sort(), [candidates]);
   const filtered = useMemo(() => candidates.filter((c) => (!area || c.area === area) && `${c.clientCode} ${c.fullName} ${c.area} ${c.primaryMobile ?? ""}`.toLowerCase().includes(q.toLowerCase())), [candidates, q, area]);
