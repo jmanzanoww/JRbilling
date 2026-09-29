@@ -201,9 +201,6 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
     return [...map.entries()].map(([areaName, clients]) => ({ area: areaName, clients, total: clients.reduce((sum, client) => sum + money(client.outstanding), 0) })).sort((a, b) => a.area.localeCompare(b.area));
   }, [candidates]);
   const eligibleTotal = useMemo(() => candidates.reduce((sum, client) => sum + money(client.outstanding), 0), [candidates]);
-  const pendingSubmissionCount = useMemo(() => submissions.filter((s) => ["PENDING", "NEEDS_INFO"].includes(s.status)).length, [submissions]);
-  const myAssignmentCount = assignments.length;
-
   const criteriaLabel = useMemo(() => {
     if (mode !== "CUSTOM") return modeLabels[mode];
     return `${includeOverdue ? "Overdue + " : ""}${fmtDateInput(dueFrom)} to ${fmtDateInput(dueTo)}`;
