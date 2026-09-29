@@ -228,7 +228,7 @@ export default function NetworkOps({ authUser, live }: Props) {
           <div className="notice notice-warning">Migration keeps billing history intact. Router assignment changes only after the migration succeeds.</div>
         </>}
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <button type="button" onClick={()=>setNetworkDialog(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          
           <button disabled={busy} className="primary-btn">{busy?"Saving...":networkDialog.type==="EDIT_DEVICE"?"Save router":networkDialog.type==="LINK_EXISTING"?"Link PPPoE":networkDialog.type==="ACTIVATE"?"Activate PPPoE":"Move router"}</button>
         </div>
       </form>}
