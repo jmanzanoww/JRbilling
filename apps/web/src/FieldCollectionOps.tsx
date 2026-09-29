@@ -387,11 +387,11 @@ export default function FieldCollectionOps({ authUser, live, view }: Props) {
               : "Review payment submissions from collectors before posting them to the official ledger."
             : view==="MY_SUBMISSIONS" ? "Review the payments you submitted for admin approval."
               : `Route for ${fmtDateInput(date)} · only clients assigned to your account are shown.`}</p>
-          {!isAdmin && assignedDates.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-500">Assigned dates:</span>{[...assignedDates].sort((a,b)=>a.localeCompare(b)).slice(0,8).map((assignedDate)=><button key={assignedDate} onClick={()=>setDate(assignedDate)} className={`btn-secondary !min-h-8 !px-2.5 text-xs ${date===assignedDate?"!border-[var(--accent)] !bg-[var(--accent-soft)] !text-[var(--accent)]":""}`}>{fmtDateInput(assignedDate)}</button>)}</div>}
+          {!isAdmin && view==="MY_ROUTE" && assignedDates.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-500">Assigned dates:</span>{[...assignedDates].sort((a,b)=>a.localeCompare(b)).slice(0,8).map((assignedDate)=><button key={assignedDate} onClick={()=>setDate(assignedDate)} className={`btn-secondary !min-h-8 !px-2.5 text-xs ${date===assignedDate?"!border-[var(--accent)] !bg-[var(--accent-soft)] !text-[var(--accent)]":""}`}>{fmtDateInput(assignedDate)}</button>)}</div>}
         </div>
-        <div className="flex flex-wrap items-end gap-2"><label className="field-label">Collection date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field mt-1 block"/></label><button onClick={() => void (isAdmin ? load() : Promise.all([load(), loadAssignedDates()]))} className="action-btn"><RefreshCcw size={15}/>Refresh</button></div>
+        <div className="flex flex-wrap items-end gap-2">{view!=="APPROVALS"&&view!=="MY_SUBMISSIONS"&&<label className="field-label">Collection date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field mt-1 block"/></label>}<button onClick={() => void (isAdmin ? load() : Promise.all([load(), loadAssignedDates()]))} className="action-btn"><RefreshCcw size={15}/>Refresh</button></div>
       </div>
-      {!isAdmin && assignedDates.length===0 && <div className="notice notice-info mt-4">No collection dates are currently assigned to your account. Ask the admin to assign your route first.</div>}
+      {!isAdmin && view==="MY_ROUTE" && assignedDates.length===0 && <div className="notice notice-info mt-4">No collection dates are currently assigned to your account. Ask the admin to assign your route first.</div>}
     </section>
 
     {isAdmin && view==="ROUTE" && <>
