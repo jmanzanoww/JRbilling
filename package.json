@@ -14,7 +14,8 @@
     "db:push": "npm run db:push -w apps/api",
     "service:install": "node deployment/install-service.cjs",
     "service:uninstall": "node deployment/uninstall-service.cjs",
-    "predev": "npm run db:generate"
+    "predev": "npm run db:generate",
+    "db:seed-real": "npm run db:seed-real -w apps/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
