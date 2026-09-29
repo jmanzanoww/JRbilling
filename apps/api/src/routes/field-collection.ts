@@ -127,6 +127,20 @@ export const fieldCollectionRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true, assigned: uniqueClientIds.length, collector: { id: collector.id, displayName: collector.displayName } };
   });
 
+  app.get("/field-collection/assignment-dates", async (request) => {
+    const auth = currentUser(request)!;
+    const query = z.object({ collectorId: z.coerce.number().int().positive().optional(), limit: z.coerce.number().int().min(1).max(180).default(60) }).parse(request.query);
+    const collectorId = auth.role === "ADMIN" ? query.collectorId : auth.id;
+    const rows = await prisma.collectionAssignment.findMany({
+      where: collectorId ? { collectorId } : {},
+      select: { collectionDate: true },
+      distinct: ["collectionDate"],
+      orderBy: { collectionDate: "desc" },
+      take: query.limit
+    });
+    return rows.map((row) => row.collectionDate.toISOString().slice(0, 10));
+  });
+
   app.get("/field-collection/assignments", async (request) => {
     const auth = currentUser(request)!;
     const query = z.object({ date: dateSchema, collectorId: z.coerce.number().int().positive().optional() }).parse(request.query);
