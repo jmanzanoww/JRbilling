@@ -185,5 +185,54 @@ export default function NetworkOps({ authUser, live }: Props) {
     </div>
 
     <section className="panel overflow-hidden"><div className="section-header"><div><h2 className="section-title">Router migration history</h2><p className="section-description">Moves keep the same billing history and PPPoE credentials; only the assigned MikroTik changes.</p></div><Network size={18} className="text-slate-400"/></div><div className="overflow-x-auto"><table className="data-table min-w-[900px]"><thead><tr><th>Subscriber</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>{migrations.map(m=><tr key={m.id}><td>{m.client?.fullName??`Client #${m.clientId}`}</td><td>{m.fromDevice?.name??"Not provisioned"}</td><td>{m.toDevice?.name??m.toDeviceId}</td><td>{m.reason}</td><td><StatusBadge value={m.status}/>{m.errorMessage&&<div className="mt-1 max-w-xs text-xs text-rose-300">{m.errorMessage}</div>}</td><td>{m.status==="FAILED"&&<button disabled={busy} onClick={()=>void retryMigration(m.id)} className="btn-ghost">Retry</button>}</td></tr>)}{!migrations.length&&<tr><td colSpan={6}><EmptyState title="No router migrations yet" description="Approved moves between standard and trusted MikroTik devices will be recorded here."/></td></tr>}</tbody></table></div></section>
+    <Dialog
+      open={Boolean(networkDialog)}
+      title={
+        networkDialog?.type==="EDIT_DEVICE" ? `Edit ${networkDialog.device.name}` :
+        networkDialog?.type==="LINK_EXISTING" ? "Link existing PPPoE" :
+        networkDialog?.type==="ACTIVATE" ? "Activate PPPoE" :
+        "Move subscriber to another router"
+      }
+      description={
+        networkDialog?.type==="EDIT_DEVICE" ? "Update router connection details and enforcement policy in one form." :
+        networkDialog?.type==="LINK_EXISTING" ? `${networkDialog.client.fullName} · link the billing record to the PPPoE account that already exists on the router.` :
+        networkDialog?.type==="ACTIVATE" ? `${networkDialog.client.fullName} · create/provision a PPPoE account as an explicit admin action.` :
+        networkDialog?.type==="MIGRATE" ? `${networkDialog.fullName} · choose the destination router and document the reason.` :
+        undefined
+      }
+      onClose={()=>{if(!busy)setNetworkDialog(null)}}
+    >
+      {networkDialog&&<form onSubmit={submitNetworkDialog} className="space-y-4">
+        {networkDialog.type==="EDIT_DEVICE"&&<>
+          <label className="field-label block">REST base URL<input name="baseUrl" defaultValue={networkDialog.device.baseUrl} className="field mt-1 w-full" required/></label>
+          <label className="field-label block">Credential key<input name="credentialKey" defaultValue={networkDialog.device.credentialKey} className="field mt-1 w-full" required/><span className="mt-1 block text-xs text-slate-500">Uses MIKROTIK_&lt;KEY&gt;_USER / PASSWORD from the server environment.</span></label>
+          <label className="field-label block">Enforcement policy<select name="enforcementPolicy" defaultValue={networkDialog.device.enforcementPolicy} className="field mt-1 w-full"><option value="WITH_CUT">With Cut</option><option value="NO_AUTO_CUT">No Auto Cut</option><option value="MANUAL_ONLY">Manual Only</option></select></label>
+          <label className="check-row"><input name="isTrustedTier" type="checkbox" defaultChecked={networkDialog.device.isTrustedTier}/><span><b>Trusted / good-payer tier</b><span className="mt-1 block text-xs text-slate-500">Trusted tier requires NO_AUTO_CUT.</span></span></label>
+          <label className="check-row"><input name="isActive" type="checkbox" defaultChecked={networkDialog.device.isActive}/><span><b>Router active</b><span className="mt-1 block text-xs text-slate-500">Inactive routers are excluded from new provisioning choices.</span></span></label>
+        </>}
+        {networkDialog.type==="LINK_EXISTING"&&<>
+          <label className="field-label block">MikroTik device<select name="mikrotikDeviceId" defaultValue={networkDialog.client.mikrotikDeviceId && activeDevices.some(d=>d.id===networkDialog.client.mikrotikDeviceId) ? networkDialog.client.mikrotikDeviceId : activeDevices[0]?.id} className="field mt-1 w-full" required>{activeDevices.map(d=><option key={d.id} value={d.id}>{d.name} · {d.enforcementPolicy.replaceAll("_"," ")}</option>)}</select></label>
+          <label className="field-label block">Existing PPPoE username<input name="account" defaultValue={networkDialog.client.mikrotikAccount??""} className="field mt-1 w-full" required/></label>
+          <label className="field-label block">Current PPPoE password (optional)<input name="password" type="password" autoComplete="off" className="field mt-1 w-full"/><span className="mt-1 block text-xs text-slate-500">Store it only if you want future router migration to be automated.</span></label>
+          <div className="notice notice-info">This links the record only. It does not create, rename, or replace the existing PPPoE account.</div>
+        </>}
+        {networkDialog.type==="ACTIVATE"&&<>
+          <label className="field-label block">MikroTik device<select name="mikrotikDeviceId" defaultValue={networkDialog.client.mikrotikDeviceId && activeDevices.some(d=>d.id===networkDialog.client.mikrotikDeviceId) ? networkDialog.client.mikrotikDeviceId : activeDevices[0]?.id} className="field mt-1 w-full" required>{activeDevices.map(d=><option key={d.id} value={d.id}>{d.name} · {d.enforcementPolicy.replaceAll("_"," ")}</option>)}</select></label>
+          <label className="field-label block">PPPoE username<input name="account" defaultValue={networkDialog.client.mikrotikAccount || networkDialog.client.clientCode.toLowerCase().replace(/[^a-z0-9]/g,"")} className="field mt-1 w-full" required/></label>
+          <label className="field-label block">PPP profile<input name="profile" defaultValue={networkDialog.client.mikrotikProfile || "default"} className="field mt-1 w-full" required/></label>
+          <label className="field-label block">PPPoE password (optional)<input name="password" type="password" autoComplete="off" className="field mt-1 w-full"/><span className="mt-1 block text-xs text-slate-500">Leave blank to auto-generate a password.</span></label>
+        </>}
+        {networkDialog.type==="MIGRATE"&&<>
+          <label className="field-label block">Destination MikroTik<select name="toDeviceId" defaultValue={networkDialog.targets[0]?.id} className="field mt-1 w-full" required>{networkDialog.targets.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label className="field-label block">Migration reason<textarea name="reason" defaultValue={networkDialog.defaultReason} className="field mt-1 min-h-24 w-full" required/></label>
+          <div className="notice notice-warning">Migration keeps billing history intact. Router assignment changes only after the migration succeeds.</div>
+        </>}
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+          <button type="button" onClick={()=>setNetworkDialog(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          <button disabled={busy} className="primary-btn">{busy?"Saving...":networkDialog.type==="EDIT_DEVICE"?"Save router":networkDialog.type==="LINK_EXISTING"?"Link PPPoE":networkDialog.type==="ACTIVATE"?"Activate PPPoE":"Move router"}</button>
+        </div>
+      </form>}
+    </Dialog>
+
   </div>;
 }
