@@ -18,7 +18,7 @@ This file is the single source of truth for the product UI. New UI must reuse th
 
 **Operational, trustworthy, compact, local-business specific.** The product should feel like software used all day by an ISP billing/collection team, not a marketing dashboard. Visual hierarchy comes from typography, alignment, borders, data density, and consistent status language. Decorative effects are intentionally limited.
 
-The interface is light-first and optimized for day-to-day back-office administration. It uses a soft gray application canvas, white navigation and work surfaces, a single blue primary action accent, compact operational tables, and restrained shadows. Status colors are semantic only.
+The interface is light-first and intentionally follows a classic Bootstrap/AdminLTE-style back-office visual language: light gray page canvas, white bordered cards, a blue administrative top bar, a light gray sidebar, solid blue active navigation, compact forms, and traditional operational tables. It should feel familiar to users of business admin systems rather than like a modern SaaS marketing dashboard. Status colors are semantic only.
 
 ## Typography hierarchy
 
@@ -160,7 +160,7 @@ Clicking the backdrop may close non-destructive dialogs. Critical destructive co
 
 ## Sidebar/navigation styles
 
-Desktop uses a persistent 232–240px white sidebar with a compact product identity, workflow-grouped navigation (Overview, Customer & Billing, Operations, System), and a restrained environment indicator. Active state uses a pale blue surface plus a 2px blue accent edge, not a pill or glow.
+Desktop uses a persistent 232–240px light-gray sidebar with workflow-grouped navigation. The active route uses a solid Bootstrap-blue background with white text. The top header uses the same blue family to provide a clear administrative shell. Avoid pill navigation and decorative gradients.
 
 Tablet/mobile uses a horizontally scrollable navigation row below the header so all routes remain reachable.
 
