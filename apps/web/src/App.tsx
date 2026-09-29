@@ -542,7 +542,7 @@ export default function App() {
         {confirmAction.type==="SUBSCRIBER_DELETE"&&<div className="subpanel p-4 text-sm"><div className="flex justify-between gap-4"><span>Subscriber</span><b>{confirmAction.client.fullName}</b></div><div className="mt-2 flex justify-between gap-4"><span>Client code</span><span>{confirmAction.client.clientCode}</span></div></div>}
         {confirmAction.type==="RESTORE_BACKUP"&&<div className="subpanel p-4 text-sm"><div className="flex justify-between gap-4"><span>Selected backup</span><b className="max-w-[70%] truncate">{restoreFile?.name??"No file selected"}</b></div></div>}
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <button type="button" onClick={()=>setConfirmAction(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          
           <button type="button" onClick={()=>void executeConfirmAction()} disabled={busy} className={confirmAction.type==="SUBSCRIBER_DELETE"||confirmAction.type==="RESTORE_BACKUP"?"btn-danger":"primary-btn"}>
             {busy?"Please wait...":confirmAction.type==="SUBSCRIBER_STATUS"?(confirmAction.inactive?"Deactivate":"Reactivate"):confirmAction.type==="SUBSCRIBER_DELETE"?"Delete record":confirmAction.type==="REAL_DATA_IMPORT"?"Import real data":"Restore backup"}
           </button>
@@ -561,7 +561,7 @@ export default function App() {
         <label className="field-label block">New PIN<input name="newPin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" className="field mt-1 w-full" required/></label>
         <label className="field-label block">Confirm new PIN<input name="confirmPin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" className="field mt-1 w-full" required/></label>
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <button type="button" onClick={()=>setPinAction(null)} disabled={busy} className="btn-secondary">Cancel</button>
+          
           <button disabled={busy} className="primary-btn">{busy?"Saving...":"Save PIN"}</button>
         </div>
       </form>}
