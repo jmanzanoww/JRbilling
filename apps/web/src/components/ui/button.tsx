@@ -5,7 +5,7 @@ type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:border-blue-700",
+  default: "border border-[#0d6efd] bg-[#0d6efd] text-white hover:border-[#0a58ca] hover:bg-[#0b5ed7]",
   secondary: "border border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200",
   outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
   ghost: "border border-transparent bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -36,7 +36,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 disabled:pointer-events-none disabled:opacity-45",
+        "inline-flex items-center justify-center gap-2 rounded font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0d6efd]/25 disabled:pointer-events-none disabled:opacity-45",
         variantClasses[variant],
         sizeClasses[size],
         className
