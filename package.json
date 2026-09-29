@@ -13,7 +13,8 @@
     "db:migrate": "npm run db:migrate -w apps/api",
     "db:push": "npm run db:push -w apps/api",
     "service:install": "node deployment/install-service.cjs",
-    "service:uninstall": "node deployment/uninstall-service.cjs"
+    "service:uninstall": "node deployment/uninstall-service.cjs",
+    "predev": "npm run db:generate"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
